@@ -1,0 +1,82 @@
+#!/bin/bash
+set -e
+LIBEXEC=$(dirname "$(readlink -nf "$BASH_SOURCE")")/util
+source ${LIBEXEC}/bash_utils.sh
+
+RUNMODES="FastQ|Long|BAM|BuildRef|BuildRefDownload|BuildRefProcess|BuildRefFromSTARRef|Diff"
+
+function usage() {
+	echo "" >&2
+	echo "IRFinder version: $VERSION" >&2
+	echo "Usage: IRFinder [${RUNMODES}]" >&2
+	echo "" >&2
+	echo "    -m RunMode    The flag -m is kept for retrocompatibility, give RunMode as first argument is recomended. " >&2
+	echo "" >&2
+	echo "                     BuildRef : Builds IRFinder reference from Ensembl FTP site. Requires Internet" >&2
+	echo "                     BuildRefDownload : only downloads FASTA and GTF files from Ensembl FTP site, ">&2
+	echo "                                        without building IRFinder reference. Requires Internet" >&2
+	echo "                     BuildRefProcess  : builds IRFinder reference from local FASTA and GTF files" >&2
+	echo "                     BuildRefFromSTARRef : builds IRFinder reference from a local STAR reference" >&2
+    echo "                     FastQ    : Quantifies intron retention from FASTQ file (Default)" >&2
+    echo "                     Long     : Quantifies intron retention from FASTQ file of long reads" >&2
+	echo "                     BAM      : Quantifies intron retention from a BAM file" >&2
+	echo "                     Diff     : Compare IRrates from two conditions using SUPPA2 algorithm" >&2	    
+
+	echo "" >&2
+	echo "    -v|--version  Show version number of current IRFinder ( when no RunMode is given )." >&2
+	echo "    -h|--help     Show this usage information. Dedicated usage informations are given if a RunMode is selected." >&2
+	echo "" >&2
+	exit 1
+}
+
+function isRunMode() {
+    if [[ $1 =~ ${RUNMODES} ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+
+
+# === Defaults ===
+
+RUNMODE=""
+export START_MESSAGE=0
+EXECDIR=$(dirname "$(readlink -nf "$BASH_SOURCE")")
+
+if [[ $# -eq 0 || $1 == "-h" || $1 == "--help" ]]; then
+	usage
+fi
+
+if [[ ( $# -eq 1 && $1 == "-v" ) || $( echo "$@" | grep -c "\-\-version" ) == "1"  ]]; then
+   echo "IRFinder version: $VERSION" 
+   exit
+fi
+
+if [[ $1 =~ ^[^-] ]] ; then
+    RUNMODE=$(echo $1 | awk -v runm="${RUNMODES}" '{IGNORECASE=1; split(runm, arr, "|"); out=$1; for ( k in arr) { if ( arr[k] == $1 ) { out=arr[k] }  }; print out }')
+    shift;
+    args=$@
+elif [[ $( echo $@ | grep -c "\-m" ) == 1 ]] ; then
+    RUNMODE=$( echo $@ | awk -v runm="${RUNMODES}" ' {out="" ; IGNORECASE=1; split(runm, arr, "|"); for ( i=1; i<= NF; i++ ) { if ($i == "-m" ) { i=i+1; for ( k in arr ) { if ( arr[k] == $i ) { out=arr[k] }  } } }; print out  } ' )
+    if [[ "${RUNMODE}" != "" ]] ; then
+        args=$( echo $@ | awk '{out=""; for ( i=1; i<=NF; i++) { if ( $i == "-m" ) { i=i+1 } else { out = out " " $i } };  print out} ' )
+    fi
+fi
+
+if [[ "${RUNMODE}" == "" ]]; then
+    echo "Possible runmodes: $RUNMODES"
+    exit 1
+fi
+
+
+
+if isRunMode $RUNMODE; then
+    $EXECDIR/IRFinder${RUNMODE} ${args} 
+else
+    echo "RunMode $RUNMODE not recognized." >&2
+    echo "Valid options for Mode are: BuildRef, BuildRefDownload, BuildRefProcess, BuildRefFromSTARRef, BAM, FastQ, Long, Diff. Default: FastQ" >&2
+fi
+
+

@@ -1,0 +1,166 @@
+#!/bin/bash
+set -e
+LIBEXEC=$(dirname "$(readlink -nf "$BASH_SOURCE")")/util
+source $LIBEXEC/bash_utils.sh 
+
+function usage() {
+	echo "" >&2
+	echo "IRFinder version: $VERSION" >&2
+	echo "Usage: IRFinder BuildRef [-v][-h][-t INT][-j INT][-e ExtraGenomeRef.fa][-b Blacklist.bed][-R ROI.bed][-m Mapability.bed][-M INT] -r ReferenceDir URL" >&2
+	echo "" >&2
+	echo "  required:" >&2
+	echo "    URL A base Ensembl URL to a (gzipped) gtf file. For example: ftp://ftp.ensembl.org/pub/release-100/gtf/homo_sapiens/Homo_sapiens.GRCh38.100.gtf.gz" >&2
+	echo "    -r ReferenceDir: Directory should not yet exist, will be created." >&2
+	echo "" >&2
+	echo "  optional:" >&2
+	echo "    -t Threads: The number of physical CPUs to use by IRFinder. When ommited (default), IRFinder will use all physical CPUs." >&2
+	echo "    -j INTEGER: An integer that is parsed to '--sjdbOverhang' under STAR 'genomeGenerate' mode. Default: 150." >&2
+    echo "    -M Mapability: A precomputed bed file containing the low mapability areas. Can also be an empty file." >&2
+    echo "    -n MapabilityReadLength: The length of the reads used to compute the mapability. Default: 70" >&2
+	echo "    -e ExtraGenomeRef.fasta.gz: Typically an ERCC reference." >&2
+	echo "    -b Blacklist.bed.gz: BED of regions to be excluded from analysis." >&2
+	echo "    -R ROI.bed.gz: A non-overlapping BED file of additional Regions of Interest for read counts." >&2	
+	echo "    -v Show version number of current IRFinder." >&2
+	echo "    -h Show this usage information." >&2
+	echo "" >&2
+	exit 1
+}
+
+
+# === Defaults ===
+THREADS=0
+REF=
+SJOH=150
+BUILDERCCFILE=
+BUILDROI=
+BUILDBLACK=
+STAREXEC=STAR
+MAPABILITY_FILE=
+MAPABILITY_LEN=100
+
+if [ $# -eq 0 ] || [[ $1 == "--help"  ]] ; then
+	usage
+fi
+
+
+while getopts ":r:j:t:S:e:b:R:m:M:hv" opt; do
+	case $opt in
+		r)
+			# Reference directory.
+			REF=$OPTARG
+			if [ -d "$REF" ]; then
+            	echo "Argument error: -r $REF. Reference directory must not exist, BuildRef will create it." >&2
+            	exit 1
+            fi
+			;;
+		j) # STAR's --sjdbOverhang
+			if [[ $OPTARG =~ ^[0-9]+$ ]] ; then 
+				SJOH=$OPTARG
+			else
+				echo "Argument error: -j $OPTARG. '$OPTARG' is not an integer." >&2
+				exit 1
+			fi
+			;;
+		t)
+			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.)
+			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
+				echo "Argument error: -t $OPTARG, number of threads must be an integer." >&2
+				exit 1
+			fi
+			THREADS=$OPTARG
+			;;
+		S)
+			## STAR executable. (must be executable!)
+			if [ -x "$OPTARG" -a ! -d "$OPTARG" ]; then
+				STAREXEC=$OPTARG
+			else
+				echo "Argument error: -S $OPTARG. STAR executable must be an executable program." >&2
+				exit 1
+			fi
+			;;
+		e)
+			#ERCC file. (must be a file)
+			if [ ! -f "$OPTARG" ]; then
+				echo "Argument error: -e $OPTARG. Specified ERCC/extra-reference file does not exist." >&2
+				exit 1
+			fi
+			BUILDERCCFILE=$OPTARG
+			;;
+		b)
+			#Blacklist local file (must be a file)
+			if [ ! -f "$OPTARG" ]; then
+				echo "Argument error: -b $OPTARG. Specified blacklist file does not exist." >&2
+				exit 1
+			fi
+			BUILDBLACK=$OPTARG
+			;;
+		R)
+			#ROI local file. (must be a file)
+			if [ ! -f "$OPTARG" ]; then
+				echo "Argument error: -R $OPTARG. Specified ROI file does not exist." >&2
+				exit 1
+			fi
+			BUILDROI=$OPTARG
+			;;
+        M)
+          if [ ! -f "$OPTARG" ]; then
+            echo "Argument error: -m $OPTARG. Specified Mapability file does not exist." >&2
+            exit 1
+          fi
+          MAPABILITY_FILE=$OPTARG
+          ;;
+        n)
+          if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
+    		echo "Argument error: -n $OPTARG, must be an integer." >&2
+			exit 1
+          fi
+		  MAPABILITY_LEN=$OPTARG
+		  ;;
+		h)
+			usage
+			;;
+		v)
+		    versionAlert
+		    ;; 
+		\?)
+			echo "Invalid option: -$OPTARG" >&2
+			exit 1
+			;;
+		:)
+			echo "Option -$OPTARG requires an argument." >&2
+			exit 1
+			;;
+	esac
+done
+shift $(($OPTIND - 1))
+
+#echo $@  #The remaining arguments.
+#echo $#  #The number of remaining arguments. 
+
+if [ ! "$REF" ]; then
+	echo "Argument error: -r is required." >&2
+	exit 1	
+fi
+
+if [[ "${MAPABILITY_FILE}" == "" ]]; then
+    checkStar $STAREXEC
+fi
+setThreads
+
+if [ ! $# -eq 1 ]; then
+	echo "Argument error: in run mode BuildRef, provide a single ftp URL. $# arguments found." >&2
+	exit 1
+fi
+
+BUILDHINT=$1
+if [[ "$BUILDHINT" != ftp* ]]; then
+	echo "Argument error: A single ftp url is required to find and download genome fasta and gtf files. eg: ftp://ftp.ensembl.org/pub/release-78/fasta/mus_musculus/dna/." >&2
+	exit 1
+fi
+
+
+echo "Launching reference build process. The full build might take hours."
+
+"$LIBEXEC/IRFinder-BuildRefFromEnsembl" BuildRef "$THREADS" "$STAREXEC" "$BUILDHINT" "$REF" "$BUILDERCCFILE" "$BUILDROI" "$BUILDBLACK" "$SJOH" "$MAPABILITY_FILE" "$MAPABILITY_LEN"
+
+

@@ -1,0 +1,261 @@
+#!/bin/bash
+set -e
+LIBEXEC=$(dirname "$(readlink -nf "$BASH_SOURCE")")/util
+source $LIBEXEC/bash_utils.sh 
+
+SUPPA_ARGS=""
+N_ROWS="-1"
+FINAL_GRPS=""
+FINAL_GRPS_MSG=""
+OUTPUT_PREFIX="./diff/"
+ALL_GROUPS=""
+SUPPA_METHOD="deseq"
+
+function usage() {
+	echo "" >&2
+	echo "IRFinder version: $VERSION" >&2
+	echo "Run Mode Diff: find differential intron retention events using DESeq2 or SUPPA2 algorithm." >&2
+	echo "" >&2
+	echo "Usage: IRFinder Diff -g:Group1 ./Group1/Sample*/IRFinder-IR-nondir.txt -g:Group2 ./Group2/Sample*/IRFinder-IR-nondir.txt [-g:Group3 ...]" >&2
+	echo "" >&2
+	echo "  required:" >&2
+	echo "    -g:GroupName : IRfinder's results ( IRFinder-IR-[non]dir.txt ) for each GroupName." >&2
+	echo "" >&2
+	echo "  optional:" >&2
+	echo "    -ir Minimum IR ratio met in at least one sample to consider the intron. Default 0.05" >&2
+	echo "    -wl Warning Level: if at least one sample has a warning with level equal or higher than the" >&2
+	echo "                       one required, the intron is not considered: " >&2
+	echo "         0: Keep all the introns " >&2
+	echo "         1: Discard the LowCover " >&2
+	echo "         2: Discard the LowCover and LowSplicing  ( Default ) " >&2	
+	echo "         3: Discard the LowCover, LowSplicing and MinorIsoform" >&2
+	echo "         4: Discard the LowCover, LowSplicing, MinorIsoform and NonUniformIntronCover" >&2
+	echo "    -m 'deseq' if you want to use DESeq2, otherwise SUPPA2 method ( [empirical|suppa] or classical ). Defualt: deseq " >&2
+	echo "    -o The output folder. Defualt: ./diff/ " >&2
+	echo "    -v Verbose." >&2
+    echo "" >&2
+    echo "  DESeq2 options" >&2
+    echo "    -c Use cooksCutoff" >&2
+    echo "    -i Use independentFiltering" >&2
+    echo "  SUPPA2 options" >&2
+	echo "Additional arguments will be passed to SUPPA2 diffSplice. You can see their details using" >&2
+	echo "  suppa.py diffSplice --help " >&2
+	echo "" >&2
+	echo "The arguments -p, -e and -i will automatically generated, don't give them as input." >&2
+	echo "" >&2
+	exit 1
+}
+
+
+# === Defaults ===
+THREADS=0
+VERBOSE=0
+RETRO=0
+MinIRratio=0.05
+WARNING_FILTER="LowCover"
+CURRENT_N=0
+
+if [[ $# -eq 0 ]] || [[ $@ =~ "--help"  ]] || [[ $@ =~ "-h" ]] ; then
+	usage
+fi
+FULL_ARGS="${@}"
+
+while [ "$1" != "" ]; do
+    case $1 in
+        -g:* )
+                CURRENT_GRP="${1/-g:/}"
+                GRP_N=0
+                while [[ "$2" =~ ^[^-]+ ]] && [[ "$2" != "" ]] ; do
+                    shift
+                    CURRENT_N=$(( CURRENT_N + 1 ))
+                    GRP_N=$(( GRP_N + 1 ))
+                    if [ -f $1 ]; then
+                        F_ROWS=$(wc -l $1 | awk '{print $1}')
+                        if [[ ${N_ROWS} == "-1" ]]; then
+                            N_ROWS=$F_ROWS
+                        else
+                            if [[ "${N_ROWS}" != "${F_ROWS}" ]]; then
+                                echo "ERROR! The file $1 contains a different number of rows respect to the previous one." >&2
+                                exit 1
+                            fi
+                        fi
+                        F_NAME=$(realpath $1)
+                        FINAL_GRPS="${FINAL_GRPS}sample_${CURRENT_N}_${CURRENT_GRP}\t${F_NAME}\n"
+                    else
+                        echo "ERROR! file $1 doesn't exists." >&2
+                        exit 1
+                    fi
+                done
+                ALL_GROUPS="${ALL_GROUPS} ${CURRENT_GRP}"
+                FINAL_GRPS_MSG="${FINAL_GRPS_MSG}\t- Group ${CURRENT_GRP}: ${GRP_N} samples\n"
+                ;;
+        -o )    shift
+                OUTPUT_PREFIX=$1
+                ;;
+        -ir )   shift
+                if [[ $(echo $1 | awk '{if ( $1 >= 0 && $1 <= 0.99 ) { print "ok" }  else { "err" } }' ) != "ok" ]]; then
+                    echo "ERROR! The Minimum IRratio has to be a float number between 0 and 0.99. "
+                    exit 1;
+                fi
+                MinIRratio=$1
+                ;;
+        -wl )   shift 
+                case $1 in
+                     0 )
+                        WARNING_FILTER="^$"
+                        ;;
+                     1 )
+                        WARNING_FILTER="LowCover"
+                        ;;
+                     2 )
+                        WARNING_FILTER="LowCover|LowSplicing"
+                        ;;
+                     3 )
+                        WARNING_FILTER="LowCover|LowSplicing|MinorIsoform"
+                        ;;
+                     4 )
+                        WARNING_FILTER="LowCover|LowSplicing|MinorIsoform|NonUniformIntronCover"
+                        ;;
+                     * ) 
+                        echo "ERROR! Warning level $1 not recognized"
+                        exit 1
+                        ;;
+                esac
+                ;;
+        -v )    VERBOSE=1
+                ;;
+        -m )    shift
+                if [[ "${1}" == "empirical" ]] || [[ "${1}" == "suppa" ]] || [[ "${1}" == "classical" ]] || [[ "${1}" == "deseq" ]]; then
+                    if [[ "${1}" == "suppa" ]]; then
+                        SUPPA_METHOD="empirical"
+                    else 
+                        SUPPA_METHOD=$1
+                    fi
+                else
+                    echo "ERROR! SUPPA2 method can be 'empirical' or 'classical'. $1 not recognized." >&2
+                    exit 1
+                fi
+                ;;
+        * )     SUPPA_ARGS="${SUPPA_ARGS} $1"
+                ;;
+    esac
+    shift
+done
+
+
+if [ -d ${OUTPUT_PREFIX} ]; then
+    if [ -f ${OUTPUT_PREFIX}/events_nowarn.ls ]; then
+        echo "ERROR! A previous run of IRFinder Diff is in the output folder ${OUTPUT_PREFIX}." >&2
+        exit 1
+    fi
+else
+    mkdir ${OUTPUT_PREFIX}
+fi
+
+if [ $( echo $ALL_GROUPS | awk '{print NF}') -lt 2 ]; then
+  echo "ERROR! You need to provide at least two groups. ${ALL_GROUPS} given" >&2
+  exit 1
+fi
+
+
+if [[ "${SUPPA_METHOD}" == "deseq" ]]; then
+    logger init
+    logger "[ " $(date) " ] Starting DESeq2" 
+    logger "------"
+    logger "\nThe given groups are: \n${FINAL_GRPS_MSG} " 
+    checkDeseq
+    COOKS=$(echo "${FULL_ARGS}" | awk 'BEGIN {c=0} /-c / {c=1} END{ print c }'  )
+    INDFILT=$(echo "${FULL_ARGS}" | awk 'BEGIN {c=0} /-i / {c=1} END{ print c }' )
+    echo -e "${FINAL_GRPS}" | awk  'BEGIN {OFS=FS="\t" ; print "SampleName", "Condition", "Files" } !/^$/ {n=split($1, arr, "_"); name=arr[1] ; for ( i=2; i <n; i++ ) { name=name "_" arr[i] } print name, arr[n], $2 }' > "${OUTPUT_PREFIX}/groups.tsv"
+    logger "You can read the stdout/stderr in the files ${OUTPUT_PREFIX}/log.[err|out]"
+    $LIBEXEC/deseq2.R "${OUTPUT_PREFIX}/groups.tsv" "${MinIRratio}" "${WARNING_FILTER}" "${COOKS}" "${INDFILT}" > ${OUTPUT_PREFIX}/log.out 2> ${OUTPUT_PREFIX}/log.err
+    for f in ${OUTPUT_PREFIX}/*_DESeq2.tsv ; do
+        awk 'BEGIN {OFS=FS="\t" } NR == 1 {print "ID" , $0} NR > 1 {split($1, arr, "/"); split(arr[4], ar, ":"); $1=arr[2] ";" arr[3] ";" ar[1] ":" ar[2] ; print } ' $f > ${f}.tmp
+        mv ${f}.tmp $f
+    done
+    logger "------"
+    logger "[ " $(date) " ] Done." 
+    logger "------"
+    exit 0
+fi
+
+checkSuppa
+logger init
+logger "[ " $(date) " ] Merging IRFinder's results to a SUPPA2 compatible format" 
+logger "------"
+echo -e "${FINAL_GRPS}" > "${OUTPUT_PREFIX}/groups.tsv"
+logger "\nThe given groups are: \n${FINAL_GRPS_MSG} " 
+
+IOE_file="${OUTPUT_PREFIX}/IRFinder.ioe"
+
+rm -f ${OUTPUT_PREFIX}/*.tpm.tsv ${OUTPUT_PREFIX}/*.psi.tsv $IOE_file ${OUTPUT_PREFIX}/events_with_warn.ls
+
+logger "Extracting the samples data..."
+> ${OUTPUT_PREFIX}/events_with_warn.ls
+while read line; do
+    sample_name=$(echo $line | awk '{print $1}')
+    if [[ "${sample_name}" != "" ]]; then
+        file_name=$(echo $line | awk '{print $2}')
+        grp_name=${sample_name/*_/}
+        tpm_file="${OUTPUT_PREFIX}/${grp_name}.tpm.tsv"
+        psi_file="${OUTPUT_PREFIX}/${grp_name}.psi.tsv"
+        if [ ! -f $tpm_file ]; then
+            awk -F '\t' ' BEGIN {print "" } $2 != "Start" { split($4, arr, "/"); print arr[2] ";" arr[3] ";" $1 ":" $2 "-" $3 } ' $file_name | tee $psi_file > $tpm_file
+            if [ ! -f $IOE_file ]; then
+                awk -F '\t' ' 
+                BEGIN {OFS="\t"; print "seqname\tgene_id\tevent_id\tinclusion_transcripts\ttotal_transcripts" } 
+                $2 != "Start"  {split($4, arr, "/"); id=arr[2] ";" arr[3] ";" $1 ":" $2 "-" $3 ; print $1 , "-", id  , "-", id  } ' $file_name > $IOE_file
+            fi
+        fi
+        awk -v s_name="${sample_name}" -F '\t' ' BEGIN { print s_name } $2 != "Start"  { if ( $17 > $18 ) { print $17 + $9 } else { print $18 + $9 }  } ' $file_name | paste $tpm_file - > $tpm_file.tmp 
+        mv $tpm_file.tmp $tpm_file
+        awk -v s_name="${sample_name}" -F '\t' ' BEGIN { print s_name } $2 != "Start"  { if ( $9 > 1 ) { print $20 } else { print "0" }  } ' $file_name | paste $psi_file - > $psi_file.tmp
+        mv $psi_file.tmp $psi_file
+        awk -F '\t' -v warn_level="${WARNING_FILTER}" 'NR > 1 && $NF ~ warn_level  {split($4, arr, "/"); print arr[2] ";" arr[3] ";" $1 ":" $2 "-" $3 }' $file_name >> ${OUTPUT_PREFIX}/events_with_warn.ls
+    fi
+done < "${OUTPUT_PREFIX}/groups.tsv"
+
+
+logger "Removing non IR data .."
+
+>${OUTPUT_PREFIX}/events.ls
+for grp in ${OUTPUT_PREFIX}/*.psi.tsv ; do
+    ### Filter non IR
+    awk -F '\t' -v thr="${MinIRratio}" ' NR > 1 { ok=0 ; for (i=2; i<=NF; i++ ) { if ( $i > thr ) { ok=1 ; i=NF+1 }   } ; if ( ok == 1 ) { print $1}  }' $grp >> ${OUTPUT_PREFIX}/events.ls
+done
+
+sort ${OUTPUT_PREFIX}/events.ls | uniq > ${OUTPUT_PREFIX}/events.ls.tmp 
+sort ${OUTPUT_PREFIX}/events_with_warn.ls | uniq > ${OUTPUT_PREFIX}/events_with_warn.ls.tmp
+mv ${OUTPUT_PREFIX}/events.ls.tmp ${OUTPUT_PREFIX}/events.ls
+mv ${OUTPUT_PREFIX}/events_with_warn.ls.tmp ${OUTPUT_PREFIX}/events_with_warn.ls
+
+comm -23 ${OUTPUT_PREFIX}/events.ls ${OUTPUT_PREFIX}/events_with_warn.ls > ${OUTPUT_PREFIX}/events_nowarn.ls
+N_OF_EVENTS=$(wc -l ${OUTPUT_PREFIX}/events_nowarn.ls | awk '{print $1}' )
+
+if [ $N_OF_EVENTS -eq 0 ]; then
+    echo "ERROR!: no IR event without warning detected."
+    exit 1
+else
+   logger "Detected ${N_OF_EVENTS} IR events without warnings."
+fi
+
+for grp in ${OUTPUT_PREFIX}/*.psi.tsv ${OUTPUT_PREFIX}/*.tpm.tsv ; do
+    head -n 1 $grp > $grp.tmp
+    awk -F '\t' ' NR == FNR {arr[$1]=1 } NR!=FNR && arr[$1] { print } ' ${OUTPUT_PREFIX}/events_nowarn.ls $grp >> $grp.tmp
+    mv $grp.tmp $grp
+done
+
+
+
+logger "------"
+logger "[ " $(date) " ] Running SUPPA2 diffSplice" 
+logger "------"
+
+suppa.py diffSplice ${SUPPA_ARGS} -m ${SUPPA_METHOD} -o ${OUTPUT_PREFIX}/suppa -e ${OUTPUT_PREFIX}/*.tpm.tsv -p ${OUTPUT_PREFIX}/*.psi.tsv  -i $IOE_file
+$LIBEXEC/adjust.R ${OUTPUT_PREFIX}/suppa.dpsi*
+logger "------"
+logger "[ " $(date) " ] Done." 
+logger "------"
+
+
+

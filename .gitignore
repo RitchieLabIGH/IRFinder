@@ -1,0 +1,5 @@
+img/
+docker_routine.sh
+src/irfinder/Release/irfinder
+src/irfinder/Release/**/*.o
+src/irfinder/Release/**/*.d

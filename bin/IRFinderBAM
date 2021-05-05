@@ -1,0 +1,156 @@
+#!/bin/bash
+set -e
+LIBEXEC=$(dirname "$(readlink -nf "$BASH_SOURCE")")/util
+source $LIBEXEC/bash_utils.sh 
+
+
+function usage() {
+	echo "" >&2
+	echo "IRFinder version: $VERSION" >&2
+	echo "Usage: IRFinder BAM -r ReferenceDir [Un]sorted.bam " >&2
+	echo "" >&2
+	echo "  required:" >&2
+	echo "    [Un]sorted.bam: the target bam file. If paired end and sorted by coordinates, "
+	echo "                    the process will be slightly slower and more memory consuming." >&2
+	# TODO - we cannot currently accept fasta input to the trimmer (only fastq), probably should, believe STAR ignores quality anyway, and we strip it on output.
+	echo "    -r ReferenceDir: As built by the 'BuildRef' option." >&2
+	echo "" >&2
+	echo "  optional:" >&2
+	echo "    -d string : Output Directory. Default is the current directory." >&2
+    echo "    -l Long reads flag." >&2
+	echo "    -v Verbose." >&2
+	echo "  additional :" >&2	
+	echo "    -w int : Warning level accepted to output the intron in the AI array file. Use 0 to disable. Default: 1" >&2
+	echo "    -i int : Minimum intron depth accepted to output the intron in the AI array file. Default: 1" >&2
+	echo "" >&2
+	exit 1
+}
+
+
+# === Defaults ===
+OUTPUTDIR=.
+THREADS=0
+REF=
+VERBOSE=0
+RETRO=0
+READ_TYPE="SR"
+AI_WARN=1
+AI_INTRON=1
+
+if [ $# -eq 0 ] | [[ $1 == "--help"  ]] ; then
+	usage
+fi
+
+while getopts ":r:t:d:i:w:vhl" opt; do
+	case $opt in
+		r)
+			# Reference directory.
+			REF=$OPTARG
+			;;
+		t)
+			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.) IRFinder is single core for now.
+			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
+				echo "Argument error: -t $OPTARG, number of threads must be an integer." >&2
+				exit 1
+			fi
+			THREADS=$OPTARG
+			;;
+        i)
+			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.)
+			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
+				echo "Argument error: -i $OPTARG, number of warning must be an integer." >&2
+				exit 1
+			fi
+			AI_INTRON=$OPTARG
+			;;
+        w)
+			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.)
+			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
+				echo "Argument error: -w $OPTARG, number of intron depth must be an integer." >&2
+				exit 1
+			fi
+			AI_WARN=$OPTARG
+			;;						
+		d)
+			OUTPUTDIR=$OPTARG
+			;;
+		v)
+			VERBOSE=1
+			;;
+	    l)  
+	        READ_TYPE="LR"
+	        ;;
+		h)
+			usage
+			;;
+		\?)
+			echo "Invalid option: -$OPTARG" >&2
+			exit 1
+			;;
+		:)
+			echo "Option -$OPTARG requires an argument." >&2
+			exit 1
+			;;
+	esac
+done
+shift $(($OPTIND - 1))
+
+
+checkRef $REF
+checkOutDir $OUTPUTDIR
+checkSamtools
+setThreads
+
+if [ ! $# -eq 1 ]; then
+    echo "Argument error: in run mode BAM, provide a single BAM as input. $# arguments found." >&2    
+    exit 1
+fi
+
+if [[ "${IRF_RUNMODE}" == "" ]]; then 
+    logger init
+fi
+
+RUNMODE="BAM" startMessage $@
+
+logger "[ " $(date) " ] Processing the BAM file with IRFinder" 
+logger "---"
+
+# BAM check 
+samtools view -H $1 > /dev/null || exit 1
+# Sort check 
+if [ $(samtools view -H $1 | grep -c "SO:coordinate" ) -eq 1 ]; then  
+    # PE check 
+    if [ $( { samtools view -H $1 ; samtools view $1 | head -n 1000 ; } | samtools view -c -f 1 ) -gt 0 ]; then
+        logger "WARNING! The given bam file is sorted by coordinate and is paired. The process will be slightly slower."
+    fi 
+fi
+
+if [ $VERBOSE -eq 1 ];then
+    ${LIBEXEC}/irfinder ${OUTPUTDIR} \
+    ${REF}/IRFinder/ref-cover.bed \
+    ${REF}/IRFinder/ref-sj.ref \
+    ${REF}/IRFinder/ref-read-continues.ref \
+    ${REF}/IRFinder/ref-ROI.bed ${READ_TYPE} "${AI_WARN}:${AI_INTRON}" $1  2>> $OUTPUTDIR/logs/irfinder.stderr | tee -a $OUTPUTDIR/logs/irfinder.stdout  
+    cat $OUTPUTDIR/logs/irfinder.stderr
+else
+    ${LIBEXEC}/irfinder ${OUTPUTDIR} \
+    ${REF}/IRFinder/ref-cover.bed \
+    ${REF}/IRFinder/ref-sj.ref \
+    ${REF}/IRFinder/ref-read-continues.ref \
+    ${REF}/IRFinder/ref-ROI.bed ${READ_TYPE} "${AI_WARN}:${AI_INTRON}" $1 >> $OUTPUTDIR/logs/irfinder.stdout 2>>  $OUTPUTDIR/logs/irfinder.stderr 
+fi
+ 
+
+
+logger "---"
+logger "[ " $(date) " ] IRFinder BAM analysis completed " 
+logger "---"
+
+"$LIBEXEC/warnings" "$OUTPUTDIR"
+
+N_WARNINGS=$(wc -l $OUTPUTDIR/WARNINGS | awk '{print $1}' )
+if [ $N_WARNINGS -gt 0 ]; then
+    logger "Process completed with warnings. Check $OUTPUTDIR/WARNINGS " >&2
+fi
+
+

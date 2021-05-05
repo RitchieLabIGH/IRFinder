@@ -1,0 +1,275 @@
+#!/bin/bash
+set -e
+LIBEXEC=$(dirname "$(readlink -nf "$BASH_SOURCE")")/util
+
+source $LIBEXEC/bash_utils.sh 
+
+
+function usage() {
+	echo "" >&2
+	echo "IRFinder version: $VERSION" >&2
+	echo "Usage: IRFinder FastQ -r ReferenceDir raw_reads_1.fastq[.gz] [raw_reads_2.fastq[.gz]]" >&2
+	echo "" >&2
+	echo "  required:" >&2
+	echo "    raw_reads_1.fastq.gz: Either single or paired end fastq file." >&2
+	# TODO - we cannot currently accept fasta input to the trimmer (only fastq), probably should, believe STAR ignores quality anyway, and we strip it on output.
+	echo "    -r ReferenceDir. As built by the 'BuildRef' option." >&2
+	echo "" >&2
+	echo "  optional:" >&2
+	echo "    -a Adaptor sequence: 'none' to disable. Default: Illumina Universal is trimmed." >&2
+	echo "    -d Output Directory: Default is the current directory." >&2
+	echo "    -M Sort memory. Maximum memory to use for sort, in MB. Default, auto-detected no greater than 10,000MB." >&2
+	echo "    -s STAR memory mode: NoSharedMemory (default), LoadAndKeep, LoadAndRemove." >&2
+	echo "    -S STAR executable: Default is 'STAR'." >&2
+    echo "    -t Threads: The number of physical CPUs to use by IRFinder. When ommited (default), IRFinder will use all physical CPUs." >&2
+  	echo "    -u Unsorted output: Do not sort the read fragment BAM file." >&2 
+  	echo "    -v Verbose ( Default: print the log only in the output/logs/irfinder.std[out|err] )" >&2 
+	echo "    -y STRING: an extra string that is parsed to STAR for reads alignment." >&2
+	echo "" >&2	
+	echo "  additional :" >&2	
+	echo "    -w Warning level accepted to output the intron in the AI array file. Use 0 to disable. Default: 1" >&2
+	echo "    -i Minimum intron depth accepted to output the intron in the AI array file. Default: 1" >&2
+	echo "" >&2
+	exit 1
+}
+
+
+# === Defaults ===
+OUTPUTDIR=.
+THREADS=0
+REF=
+STARMEMORYMODE=NoSharedMemory
+DOSORT=1
+ADAPT=
+ADAPTTRIM=1
+FASTQ=0
+STAREXTRA=
+STAREXEC=STAR
+EXTRAADAPT=
+EXTRAREADFILESCOMMAND=		
+HAS_FIFO=0
+VERBOSE=0
+SORTMEM=$(getSortingMem )
+AI_WARN=1
+AI_INTRON=1
+
+
+if [ $# -eq 0 ] || [[ $1 == "--help"  ]] ; then
+	usage
+fi
+
+while getopts ":m:r:a:t:d:s:S:uM:i:w:y:vh" opt; do
+	case $opt in
+		r)
+			# Reference directory.
+			REF=$OPTARG
+			;;
+		a)
+			if [[ $OPTARG == "none" || $OPTARG == "off" ]]; then
+				ADAPTTRIM=0
+			elif [[ ! $OPTARG =~ ^[ATGCN,]*$ ]]; then
+				echo "Argument error: -a $OPTARG. Adaptor may only contain [ATGCN]. Separate Adaptors with a comma for paired end." >&2
+				exit 1
+			else
+				ADAPT=$OPTARG
+			fi
+			;;
+		t)
+			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.)
+			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
+				echo "Argument error: -t $OPTARG, number of threads must be an integer." >&2
+				exit 1
+			fi
+			THREADS=$OPTARG
+			;;
+		d)
+			OUTPUTDIR=$OPTARG
+			;;
+		s)
+			## STAR memory mode (must be from fixed list).
+			if [[ $OPTARG == "NoSharedMemory" || $OPTARG == "LoadAndKeep" || $OPTARG == "LoadAndRemove" ]]; then
+				STARMEMORYMODE=$OPTARG
+			else
+				echo "Argument error: -s $OPTARG. Valid options for STAR memory mode are: NoSharedMemory, LoadAndKeep, LoadAndRemove. Default: NoSharedMemory" >&2
+				exit 1
+			fi
+			;;
+		S)
+			## STAR executable. (must be executable!)
+			if [ -x "$OPTARG" -a ! -d "$OPTARG" ]; then
+				STAREXEC=$OPTARG
+			else
+				echo "Argument error: -S $OPTARG. STAR executable must be an executable program." >&2
+				exit 1
+			fi
+			;;
+		u)
+			DOSORT=0
+		    ;;
+		M)
+			#Max sort memory in MB.
+			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
+				echo "Argument error: -M $OPTARG, maximum sort RAM in MB must be an integer." >&2
+				exit 1
+			fi
+			SORTMEM=$OPTARG
+			;;
+		y)
+			STAREXTRA=$OPTARG
+			;;
+		v)
+			VERBOSE=1
+			;;
+		h)
+			usage
+			;;
+        i)
+			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.)
+			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
+				echo "Argument error: -i $OPTARG, number of warning must be an integer." >&2
+				exit 1
+			fi
+			AI_INTRON=$OPTARG
+			;;
+        w)
+			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.)
+			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
+				echo "Argument error: -w $OPTARG, number of intron depth must be an integer." >&2
+				exit 1
+			fi
+			AI_WARN=$OPTARG
+			;;			
+	    m)
+	        ## kept for compatibility
+	        ;;
+		\?)
+			echo "Invalid option: -$OPTARG" >&2
+			exit 1
+			;;
+		:)
+			echo "Option -$OPTARG requires an argument." >&2
+			exit 1
+			;;
+	esac
+done
+shift $(($OPTIND - 1))
+
+
+checkRef $REF
+checkOutDir $OUTPUTDIR
+checkStar $STAREXEC
+checkSamtools
+setThreads
+
+
+if [[ "$1" == *.gz ]]; then
+	EXTRAREADFILESCOMMAND=" --readFilesCommand \"gzip -dc\" "
+fi
+
+if [ $# -eq 1 ]; then
+	FASTQ=1
+	#Single End
+    if [ ! -f "$1" ] && [ ! -p "$1" ]; then
+    	echo "Argument error: FastQ file $1 does not exist (single fastq provided)." >&2
+	   	exit 1
+    fi
+	if [ $ADAPTTRIM -eq 1 ]; then
+		if [ ! $ADAPT ]; then
+			ADAPT="AGATCGGAAG"
+		elif [[ $ADAPT =~ ^[ATGC]+$ ]]; then
+			ADAPT=$ADAPT
+		else
+			echo "Argument error: -a $ADAPT. Single end mode, just one adaptor needs to be provided. eg: AGATCGGAAG." >&2
+			exit 1
+		fi
+		EXTRAADAPT="--clip3pAdapterSeq $ADAPT"
+	fi
+	INPUT_FILE=$1
+elif [ $# -eq 2 ]; then
+	#Paired End.
+	for f in $@ ; do
+       	if [ ! -f "$f" ] && [ ! -p "$f" ]; then
+    		echo "Argument error: FastQ file $f does not exist (paired fastq provided)." >&2
+	    	exit 1
+    	fi
+	done
+	if [ $ADAPTTRIM -eq 1 ]; then
+		if [ ! $ADAPT ]; then
+			ADAPT="AGATCGGAAG AGATCGGAAG"
+		elif [[ $ADAPT =~ ^[ATGCN]+,[ATGCN]+$ ]]; then
+			## two adaptors are present, good, now translate that comma into a space / dual parameters.
+			ADAPT=${ADAPT//,/ }
+		else
+			echo "Argument error: -a $ADAPT. Paired end mode, two adaptors need to be provided separated by a comma. eg: AGATCGGAAG,AGATCGGAAG." >&2
+			exit 1
+		fi
+		FIFO1="$OUTPUTDIR/Reads_1.fifo"
+		FIFO2="$OUTPUTDIR/Reads_2.fifo"
+		mkfifo "$FIFO1"
+		mkfifo "$FIFO2"
+		if [[ "$1" == *.gz ]]; then
+			"$LIBEXEC/trim" <(gzip -cd "$1") <(gzip -cd "$2") "$FIFO1" "$FIFO2" $ADAPT >> "$OUTPUTDIR/logs/trim.log" &
+		else
+			"$LIBEXEC/trim" "$1" "$2" "$FIFO1" "$FIFO2" $ADAPT >> "$OUTPUTDIR/logs/trim.log" &
+		fi
+		INPUT_FILE="$FIFO1 $FIFO2"
+		HAS_FIFO=1
+		EXTRAREADFILESCOMMAND=
+	else
+	    INPUT_FILE="$1 $2"
+	fi
+else
+	echo "Argument error: in run mode FastQ, provide either one or two fastq files. $# arguments found." >&2
+	exit 1
+fi
+
+
+
+RUNMODE="FastQ" startMessage $@
+
+
+logger init
+logger "[ " $(date) " ] STAR is starting with $THREADS threads" 
+
+$STAREXEC --genomeLoad $STARMEMORYMODE --runThreadN $THREADS \
+ --genomeDir $REF/STAR --outFilterMultimapNmax 1 \
+ --outSAMstrandField intronMotif \
+ --outFileNamePrefix ${OUTPUTDIR}/ \
+ --outSAMunmapped None  \
+ --outSAMtype BAM Unsorted --outStd BAM_Unsorted $STAREXTRA \
+  $EXTRAREADFILESCOMMAND $EXTRAADAPT \
+   --readFilesIn $INPUT_FILE  > $OUTPUTDIR/Unsorted.bam 
+ 
+logger "---"
+logger "[ " $(date) " ] STAR mapping completed" 
+ 
+mv $OUTPUTDIR/Log* $OUTPUTDIR/logs/
+
+if [ $HAS_FIFO -eq 1 ]; then
+    rm $FIFO1 $FIFO2
+fi
+
+VERBOSE_FLAG=""
+if [[ "${VERBOSE}" == "1" ]]; then
+    VERBOSE_FLAG=" -v " 
+fi
+
+IRF_RUNMODE="FastQ" $(dirname "$(readlink -nf "$BASH_SOURCE")")/IRFinderBAM $VERBOSE_FLAG -i $AI_INTRON -w $AI_WARN -r $REF -t $THREADS -d $OUTPUTDIR $OUTPUTDIR/Unsorted.bam || exit 1
+
+
+if [ $DOSORT -eq 1 ]; then
+    logger "---"
+    logger "[ " $(date) " ] Sorting the bam file" 
+    echo "---- samtools sort  -@ $THREADS -m ${SORTMEM}M -o $OUTPUTDIR/Sorted.bam $OUTPUTDIR/Unsorted.bam  ---"  >> $OUTPUTDIR/logs/samtools.log && \
+    samtools sort  -@ $THREADS -m ${SORTMEM}M -o $OUTPUTDIR/Sorted.bam $OUTPUTDIR/Unsorted.bam &>> $OUTPUTDIR/logs/samtools.log && \
+    logger "---"
+    logger "[ " $(date) " ] Indexing the sorted bam file" 
+    echo "---- samtools index -@ $THREADS $OUTPUTDIR/Sorted.bam ---" >> $OUTPUTDIR/logs/samtools.log && \
+    samtools index  -@ $THREADS  $OUTPUTDIR/Sorted.bam  &>> $OUTPUTDIR/logs/samtools.log && \
+    rm $OUTPUTDIR/Unsorted.bam
+fi
+logger "---"
+logger "[ " $(date) " ] IRFinder FastQ completed." 
+logger "---"
+
+

@@ -1,0 +1,193 @@
+#!/bin/bash
+set -e
+LIBEXEC=$(dirname "$(readlink -nf "$BASH_SOURCE")")/util
+
+source $LIBEXEC/bash_utils.sh 
+
+
+function usage() {
+	echo "" >&2
+	echo "IRFinder version: $VERSION" >&2
+	echo "Usage: IRFinder Long -r ReferenceDir raw_reads_1.fast[q|a][.gz] [raw_reads_2.fast[q|a][.gz]...]" >&2
+	echo "" >&2
+	echo "  required:" >&2
+	echo "    raw_reads_1.fast[q|a][.gz]: one or more long reads fastq or fasta files, compressed or not." >&2
+	echo "    -r ReferenceDir. As built by the 'BuildRef' option." >&2
+	echo "" >&2
+	echo "  optional:" >&2
+	echo "    -d Output Directory: Default is the current directory." >&2
+	echo "    -M Sort memory. Maximum memory to use for sort, in MB. Default, auto-detected no greater than 10,000MB." >&2
+	echo "    -x Minimap2 preset: splice (default), map-[pb|ont], ava-[pb|ont], asm[5|10|20], sr. see minimap2.1 for details." >&2
+	echo "    -E Minimap2 executable: Default is 'minimap2'." >&2
+    echo "    -t Threads: The number of physical CPUs to use by IRFinder. When ommited (default), IRFinder will use all physical CPUs." >&2
+  	echo "    -u Unsorted output: Do not sort the read fragment BAM file." >&2 
+  	echo "    -v Verbose ( Default: print the log only in the output/logs/irfinder.std[out|err] )" >&2 
+	echo "    -y STRING: an extra string that is parsed to Minimap2 for reads alignment. Default: '-uf -k14' " >&2
+	echo "" >&2
+	echo "  additional :" >&2	
+	echo "    -w Warning level accepted to output the intron in the AI array file. Use 0 to disable. Default: 1" >&2
+	echo "    -i Minimum intron depth accepted to output the intron in the AI array file. Default: 1" >&2
+	echo "" >&2
+	exit 1
+}
+
+# === Defaults ===
+OUTPUTDIR=.
+THREADS=0
+REF=
+MINIMAP_PRESET="splice"
+DOSORT=1
+MINIMAP_EXTRA="-uf -k14"
+MINIMAP_EXEC=minimap2
+VERBOSE=0
+SORTMEM=$(getSortingMem )
+AI_WARN=1
+AI_INTRON=1
+
+if [ $# -eq 0 ] || [[ $1 == "--help"  ]] ; then
+	usage
+fi
+
+while getopts ":m:r:t:d:E:x:uM:y:i:w:vh" opt; do
+	case $opt in
+		r)
+			# Reference directory.
+			REF=$OPTARG
+			;;
+		t)
+			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.)
+			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
+				echo "Argument error: -t $OPTARG, number of threads must be an integer." >&2
+				exit 1
+			fi
+			THREADS=$OPTARG
+			;;
+		d)
+			OUTPUTDIR=$OPTARG
+			;;
+		x)
+			## Minimap preset.
+			if [[ $OPTARG =~ ^splice$|^map-(pb|ont)$|^ava-(pb|ont)$|^asm[5|10|20]$|^sr$ ]]; then
+				MINIMAP_PRESET=$OPTARG
+			else
+				echo "Argument error: -x $OPTARG. Valid options for Minimap presets are: " >&2
+				echo "  splice (default), map-pb, map-ont, ava-pb, ava-ont, asm5, asm10, asm20 or sr" >&2
+				exit 1
+			fi
+			;;
+		E)
+			## Minimap executable. (must be executable!)
+			if [ -x "$OPTARG" -a ! -d "$OPTARG" ]; then
+				MINIMAP_EXEC=$OPTARG
+			else
+				echo "Argument error: -S $OPTARG. Minimap2 executable must be an executable program." >&2
+				exit 1
+			fi
+			;;
+		u)
+			DOSORT=0
+		    ;;
+        i)
+			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.)
+			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
+				echo "Argument error: -i $OPTARG, number of warning must be an integer." >&2
+				exit 1
+			fi
+			AI_INTRON=$OPTARG
+			;;
+        w)
+			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.)
+			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
+				echo "Argument error: -w $OPTARG, number of intron depth must be an integer." >&2
+				exit 1
+			fi
+			AI_WARN=$OPTARG
+			;;		    
+		M)
+			#Max sort memory in MB.
+			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
+				echo "Argument error: -M $OPTARG, maximum sort RAM in MB must be an integer." >&2
+				exit 1
+			fi
+			SORTMEM=$OPTARG
+			;;
+		y)
+			MINIMAP_EXTRA=$OPTARG
+			;;
+		v)
+			VERBOSE=1
+			;;
+		h)
+			usage
+			;;
+		\?)
+			echo "Invalid option: -$OPTARG" >&2
+			exit 1
+			;;
+		:)
+			echo "Option -$OPTARG requires an argument." >&2
+			exit 1
+			;;
+	esac
+done
+shift $(($OPTIND - 1))
+
+if [ $# -eq 0 ];then
+    echo "ERROR! No fasta or fastq file provided." >&2
+    exit 1
+fi
+
+INPUT_FILES=""
+for f in $@; do
+    if [ -f $f ]; then
+        INPUT_FILES="${INPUT_FILES} ${f}"
+    else
+        echo "ERROR! File ${f} doesn't exists." >&2
+        exit 1
+    fi
+done
+
+checkRef $REF
+checkOutDir $OUTPUTDIR
+checkMinimap $MINIMAP_EXEC
+checkSamtools
+setThreads
+
+logger init
+
+RUNMODE="Long" startMessage $@
+
+
+
+logger "[ " $(date) " ] Minimap2 is starting with $THREADS threads" 
+
+$MINIMAP_EXEC -a -t $THREADS -x $MINIMAP_PRESET $MINIMAP_EXTRA $REF/genome.fa $@  2> $OUTPUTDIR/logs/minimap2.log | samtools view -b > $OUTPUTDIR/Unsorted.bam  || exit 1
+ 
+logger "---"
+logger "[ " $(date) " ] Minimap2 mapping completed" 
+logger "---"
+
+VERBOSE_FLAG=""
+if [[ "${VERBOSE}" == "1" ]]; then
+    VERBOSE_FLAG=" -v " 
+fi
+
+IRF_RUNMODE="Long" $(dirname "$(readlink -nf "$BASH_SOURCE")")/IRFinderBAM $VERBOSE_FLAG -i $AI_INTRON -w $AI_WARN -l -r $REF -t $THREADS -d $OUTPUTDIR $OUTPUTDIR/Unsorted.bam || exit 1
+
+
+if [ $DOSORT -eq 1 ]; then
+    logger "---"
+    logger "[ " $(date) " ] Sorting the bam file" 
+    echo "---- samtools sort  -@ $THREADS -m ${SORTMEM}M -o $OUTPUTDIR/Sorted.bam $OUTPUTDIR/Unsorted.bam  ---"  >> $OUTPUTDIR/logs/samtools.log && \
+    samtools sort  -@ $THREADS -m ${SORTMEM}M -o $OUTPUTDIR/Sorted.bam $OUTPUTDIR/Unsorted.bam &>> $OUTPUTDIR/logs/samtools.log && \
+    logger "---"
+    logger "[ " $(date) " ] Indexing the sorted bam file" 
+    echo "---- samtools index -@ $THREADS $OUTPUTDIR/Sorted.bam ---" >> $OUTPUTDIR/logs/samtools.log && \
+    samtools index  -@ $THREADS  $OUTPUTDIR/Sorted.bam  &>> $OUTPUTDIR/logs/samtools.log && \
+    rm $OUTPUTDIR/Unsorted.bam
+fi
+logger "---"
+logger "[ " $(date) " ] IRFinder Long completed." 
+logger "---"
+
+
