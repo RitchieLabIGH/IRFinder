@@ -1,16 +1,13 @@
+
 # IRFinder Changelogs
 
 **2.0.0**
  1. **Novelties**
     1. New **Long** RunMode to process fast[q|a] files from long reads
     using Minimap2 as aligner.
-    2. New **-l** argument in **BAM** RunMode, to process long reads using an alternative panel of threshold for the warnings:
-        - **Low Cover** ->``(Column19 + Column9) < 3  ``
-        - **LowSplicing** -> `` Column19 < 2``
-        - **MinorIsoform** -> ``Column19 * 1.5 < max(Column17, Column18)``
-  
-     3. New **AI** RunMode that uses a --- model to detect IR events on introns without warning in the last column of the result `IRFinder-IR-[non]dir.txt` file. 
-    4. New **Diff** RunMode that uses SUPPA2 ( https://github.com/comprna/SUPPA ) algorithm to identify differential PSI event. IRRatio are used instead of PSI and the local abundance of each intron (max(splices right , splices left) + IntronDepth) is used instead of the TPM values. The results can be used for SUPPA2 downstream analysis.
+    2. New **-l** argument in **BAM** RunMode, to process long reads using an alternative algorithm. More information in the paper.
+     3. New **AI** RunMode that uses a CNN model to detect false IR events on introns without warning in the last column of the result `IRFinder-IR-[non]dir.txt` file. It will generate a file containing only validated introns ( `IRFinder-IR-[non]dir-val.txt` )
+    4. New **Diff** RunMode that uses SUPPA2 ( https://github.com/comprna/SUPPA ) or DESeq2 algorithm to identify differential IR events. 
     5. New **CLI** with dedicated helps for each RunMode and a verbose mode.
     6. New **installation script**, to check the dependencies and install or uninstall IRFinder globally and locally.
 
