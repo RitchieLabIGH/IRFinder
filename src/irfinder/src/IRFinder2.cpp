@@ -78,26 +78,27 @@ int main(int argc, char *argv[]) {
 			<< " - Input BAM:           \t" << input_BAM << "\n\n";
 	std::cout.flush();
 
-
+	std::cout << "Preparing the reference:\n";
+	std::cout << " - Junction count...";std::cout.flush();
 	JunctionCount oJuncCount;
 	std::ifstream inJuncCount;
 	inJuncCount.open(s_inSJ, std::ifstream::in);
 	oJuncCount.loadRef(inJuncCount);
 	inJuncCount.close();
-
+	std::cout << "done.\n - Span points...";std::cout.flush();
 	SpansPoint oSpansPoint;
 	oSpansPoint.setSpanLength(5, 4);
 	std::ifstream inSpansPoint;
 	inSpansPoint.open(s_inSpansPoint, std::ifstream::in);
 	oSpansPoint.loadRef(inSpansPoint);
 	inSpansPoint.close();
-
+	std::cout << "done.\n - Coverage blocks...";std::cout.flush();
 	CoverageBlocksIRFinder oCoverageBlocks(read_type);
 	std::ifstream inCoverageBlocks;
 	inCoverageBlocks.open(s_inCoverageBlocks, std::ifstream::in);
 	oCoverageBlocks.loadRef(inCoverageBlocks);
 	inCoverageBlocks.close();
-
+	std::cout << "done.\n";std::cout.flush();
 	BAM2blocks BB;
 
 	BB.registerCallbackChrMappingChange(
@@ -125,6 +126,7 @@ int main(int argc, char *argv[]) {
 
 	FragmentsInROI oFragmentsInROI;
 	if (s_inROI != "NULL") {
+		std::cout << " - ROI...";std::cout.flush();
 		std::ifstream inFragmentsInROI;
 		inFragmentsInROI.open(s_inROI, std::ifstream::in);
 		oFragmentsInROI.loadRef(inFragmentsInROI);
@@ -136,6 +138,7 @@ int main(int argc, char *argv[]) {
 		BB.registerCallbackProcessBlocks(
 				std::bind(&FragmentsInROI::ProcessBlocks, &oFragmentsInROI,
 						std::placeholders::_1));
+		std::cout << "done\n";std::cout.flush();
 	}
 
 	BB.registerCallbackChrMappingChange(
@@ -145,7 +148,7 @@ int main(int argc, char *argv[]) {
 			std::bind(&CoverageBlocks::ProcessBlocks, &oCoverageBlocks,
 					std::placeholders::_1));
 	BB.openFile(input_BAM);
-
+	std::cout << "\nProcessing the BAM\n";std::cout.flush();
 	BB.processAll();
 
 	if (s_inROI != "NULL") {

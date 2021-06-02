@@ -4,6 +4,7 @@ Detecting intron retention from RNA-Seq experiments
 To start using IRFinder, read our [wiki user manual.](https://github.com/RitchieLabIGH/IRFinder/wiki)
 
 [CHANGELOG](https://github.com/RitchieLabIGH/IRFinder/CHANGELOG.md)
+
 IRFinder Version 1 is still available at https://github.com/williamritchie/IRFinder but is not anymore maintained.
 ## About IRFinder
 

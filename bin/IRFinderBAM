@@ -37,7 +37,8 @@ READ_TYPE="SR"
 AI_WARN=1
 AI_INTRON=1
 
-if [ $# -eq 0 ] | [[ $1 == "--help"  ]] ; then
+
+if [ $# -eq 0 ] || [[ $1 == "--help"  ]] ; then
 	usage
 fi
 
@@ -124,6 +125,7 @@ if [ $(samtools view -H $1 | grep -c "SO:coordinate" ) -eq 1 ]; then
         logger "WARNING! The given bam file is sorted by coordinate and is paired. The process will be slightly slower."
     fi 
 fi
+
 
 if [ $VERBOSE -eq 1 ];then
     ${LIBEXEC}/irfinder ${OUTPUTDIR} \

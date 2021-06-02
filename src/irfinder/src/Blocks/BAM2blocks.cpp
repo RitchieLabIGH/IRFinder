@@ -252,13 +252,49 @@ unsigned int BAM2blocks::processSingle(bam_read_core *read1) {
 	return totalBlockLen;
 }
 
+void BAM2blocks::setMate(std::vector<char> & mate) {
+	uint64_t i=0, j=0;
+	while (i < BAM_READ_CORE_BYTES){
+		tmp_mate.c[j++]=mate[i++];
+	}
+
+	j=0;
+	while (i < BAM_READ_CORE_BYTES+tmp_mate.l_read_name ){
+		tmp_mate.read_name[j++]=mate[i++];
+	}
+	j=0;
+	while (i < mate.size()){
+		tmp_mate.cigar_buffer[j++]=mate[i++];
+	}
+}
+void BAM2blocks::saveMate() {
+	std::vector<char> mate;
+	for (int i=0; i< BAM_READ_CORE_BYTES; i++) {
+		mate.push_back(tmp_read.c[i]);
+	}
+	for (int i = 0; i < tmp_read.l_read_name; i++) {
+		mate.push_back(tmp_read.read_name[i]);
+	}
+	for (int i = 0; i < tmp_read.n_cigar_op * 4; i++) {
+		mate.push_back(tmp_read.cigar_buffer[i]);
+	}
+	tmp_reads[getName(tmp_read)] = mate;
+}
+
+std::string BAM2blocks::getName(bam_read_core & read ){
+	std::string name="";
+	for (int i=0; i<read.l_read_name; i++) {
+		name+=read.read_name[i];
+	}
+	return name;
+}
+
 int BAM2blocks::processAll() {
 
 	totalNucleotides = 0;
 	current_read = 0;
 	//int bytesread = 0;
 	bool running = getNextReadHead(tmp_read);
-
 	while (running) {
 		current_read++;
 		if (IN->fail()) {
@@ -267,8 +303,8 @@ int BAM2blocks::processAll() {
 			//This is possibly also just about the end of the file (say an extra null byte).
 			//IN->gcount() knows how many characters were actually read last time.
 		}
-
-		if (!(tmp_read.flag & 0x1) || !(tmp_read.flag & 0x2) || (tmp_read.flag & 0x8)) {
+		if (!(tmp_read.flag & 0x1) || !(tmp_read.flag & 0x2)
+				|| (tmp_read.flag & 0x8)) {
 			/* If is a single read ( or mate is unmapped or are not mapped in a proper way ) -- process it as a single -- then discard/overwrite */
 			getReadBody(tmp_read);
 			cSingleReads++;
@@ -277,12 +313,13 @@ int BAM2blocks::processAll() {
 			/* If it is potentially a paired read, store it in our buffer, process the pair together when it is complete */
 			getReadBody(tmp_read);
 			if (coord_sorted) {
-				if (tmp_reads.count(std::string(tmp_read.read_name)) == 1) {
-					handlePairs(tmp_reads[std::string(tmp_read.read_name)],
-							tmp_read);
-					tmp_reads.erase(std::string(tmp_read.read_name));
+				std::string name=getName(tmp_read);
+				if (tmp_reads.count(name) == 1) {
+					setMate(tmp_reads[name]);
+					handlePairs(tmp_mate, tmp_read);
+					tmp_reads.erase(name);
 				} else {
-					tmp_reads[std::string(tmp_read.read_name)] = tmp_read;
+					saveMate();
 				}
 			} else {
 				running = getNextReadHead(tmp_mate);
@@ -299,7 +336,8 @@ int BAM2blocks::processAll() {
 				<< " reads have no mates. Processed a single end." << std::endl;
 		for (auto &pair : tmp_reads) {
 			cSingleReads++;
-			totalNucleotides += processSingle(&pair.second);
+			setMate(pair.second);
+			totalNucleotides += processSingle(&tmp_mate);
 		}
 	}
 	std::cout << "Total reads processed: " << current_read - 1 << std::endl;
@@ -311,8 +349,9 @@ int BAM2blocks::processAll() {
 	std::cout << "Intersect pairs: " << cIntersectPairs << std::endl;
 	std::cout << "Long pairs: " << cLongPairs << std::endl;
 	std::cout << "Skipped reads: " << cSkippedReads << std::endl;
-	for (auto reason : skippedReason){
-		std::cout << " - flag " << reason.first << ": " << reason.second <<  std::endl;
+	for (auto reason : skippedReason) {
+		std::cout << " - flag " << reason.first << ": " << reason.second
+				<< std::endl;
 	}
 	std::cout << "Error reads: " << cErrorReads << std::endl;
 	return (0);
@@ -320,7 +359,8 @@ int BAM2blocks::processAll() {
 
 void BAM2blocks::errorMessage() {
 	std::cerr << "Input error at line:" << current_read << std::endl;
-	std::cerr << "Characters read on last read call:" << IN->gcount() << std::endl;
+	std::cerr << "Characters read on last read call:" << IN->gcount()
+			<< std::endl;
 	std::cout << "ERR-Total reads processed: " << current_read - 1 << std::endl;
 	std::cout << "ERR-Total nucleotides: " << totalNucleotides << std::endl;
 	std::cout << "ERR-Total singles processed: " << cSingleReads << std::endl;
@@ -330,8 +370,9 @@ void BAM2blocks::errorMessage() {
 	std::cout << "ERR-Intersect pairs: " << cIntersectPairs << std::endl;
 	std::cout << "ERR-Long pairs: " << cLongPairs << std::endl;
 	std::cout << "ERR-Skipped reads: " << cSkippedReads << std::endl;
-	for (auto reason : skippedReason){
-		std::cout << " - flag " << reason.first << ": " << reason.second <<  std::endl;
+	for (auto reason : skippedReason) {
+		std::cout << " - flag " << reason.first << ": " << reason.second
+				<< std::endl;
 	}
 	std::cout << "ERR-Error reads: " << cErrorReads << std::endl;
 }
@@ -346,6 +387,7 @@ void BAM2blocks::handlePairs(bam_read_core &read, bam_read_core &mate) {
 		}
 		cPairedReads++;
 	} else {
+		std::cout <<" A: " << getName(read) << " B: " << getName(mate) << "\n";
 		cErrorReads++;
 		// Now this should never happend
 	}
@@ -356,10 +398,10 @@ bool BAM2blocks::getNextReadHead(bam_read_core &read) {
 		return false;
 	}
 	IN->read(read.c, BAM_READ_CORE_BYTES);
-	if ((tmp_read.flag & 0x900) || (tmp_read.flag & 0x4) ) {
+	if ((tmp_read.flag & 0x900) || (tmp_read.flag & 0x4)) {
 		IN->ignore(read.block_size - BAM_READ_CORE_BYTES + 4);
-		if (skippedReason.count(tmp_read.flag) == 0 ){
-			skippedReason[tmp_read.flag]=1;
+		if (skippedReason.count(tmp_read.flag) == 0) {
+			skippedReason[tmp_read.flag] = 1;
 		} else {
 			skippedReason[tmp_read.flag]++;
 		}

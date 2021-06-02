@@ -72,16 +72,18 @@ class BAM2blocks {
 	uint64_t totalNucleotides;
 	std::map<uint16_t, uint> skippedReason;
 
-	std::map<std::string, bam_read_core> tmp_reads;
+	std::map<std::string, std::vector<char>> tmp_reads;
 	bam_read_core tmp_read;
 	bam_read_core tmp_mate;
-	uint64_t current_read;
+	uint64_t current_read=0;
 
 	bool getNextReadHead(bam_read_core &);
 	void errorMessage();
 	void getReadBody(bam_read_core &);
 	void handlePairs(bam_read_core &, bam_read_core &);
-
+	std::string getName(bam_read_core &);
+	void setMate(std::vector<char> & mate);
+	void saveMate();
 	std::istream * IN;
 	std::istream instream;
 	void cigar2block(int32_t * cigar, uint16_t n_cigar_op, std::vector<int> &starts, std::vector<int> &lens, int &ret_genome_len);

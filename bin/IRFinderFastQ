@@ -260,10 +260,10 @@ IRF_RUNMODE="FastQ" $(dirname "$(readlink -nf "$BASH_SOURCE")")/IRFinderBAM $VER
 if [ $DOSORT -eq 1 ]; then
     logger "---"
     logger "[ " $(date) " ] Sorting the bam file" 
-    echo "---- samtools sort  -@ $THREADS -m ${SORTMEM}M -o $OUTPUTDIR/Sorted.bam $OUTPUTDIR/Unsorted.bam  ---"  >> $OUTPUTDIR/logs/samtools.log && \
-    samtools sort  -@ $THREADS -m ${SORTMEM}M -o $OUTPUTDIR/Sorted.bam $OUTPUTDIR/Unsorted.bam &>> $OUTPUTDIR/logs/samtools.log && \
-    logger "---"
-    logger "[ " $(date) " ] Indexing the sorted bam file" 
+    echo "---- samtools sort  -@ $THREADS -o $OUTPUTDIR/Sorted.bam $OUTPUTDIR/Unsorted.bam  ---"  >> $OUTPUTDIR/logs/samtools.log && \
+    samtools sort  -@ $THREADS -o $OUTPUTDIR/Sorted.bam $OUTPUTDIR/Unsorted.bam &>> $OUTPUTDIR/logs/samtools.log && \
+    logger "---" && \
+    logger "[ " $(date) " ] Indexing the sorted bam file"  && \
     echo "---- samtools index -@ $THREADS $OUTPUTDIR/Sorted.bam ---" >> $OUTPUTDIR/logs/samtools.log && \
     samtools index  -@ $THREADS  $OUTPUTDIR/Sorted.bam  &>> $OUTPUTDIR/logs/samtools.log && \
     rm $OUTPUTDIR/Unsorted.bam
