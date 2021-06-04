@@ -1,0 +1,28 @@
+{
+  "Image directory": "/work/ritchieteam/EMT_irfinder/trainingshortread/",
+  "Output directory": "depth15_ir0.1_noir0.cov50long_.01cov25allshortnondir_congruant_2_2021-05-20_12_01",
+  "Validation split": 0.1,
+  "Epochs": 500,
+  "Batch size": 50,
+  "Model json": null,
+  "Image size": 256,
+  "Number of colors": 0,
+  "Seed": 123,
+  "Threads": 5,
+  "Dataset": {
+    "counts": [
+      [
+        1662,
+        185
+      ],
+      [
+        8164,
+        907
+      ]
+    ],
+    "class_names": [
+      "hIR",
+      "noIR"
+    ]
+  }
+}

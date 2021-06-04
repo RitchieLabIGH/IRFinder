@@ -568,7 +568,7 @@ class IntronModeller():
 
                 line[4] = str(score[0].numpy())
                 #line[-1]= pred_lab
-            self._out_f.write(("\t").join(line) + "\n")
+                self._out_f.write(("\t").join(line))
         return
 
     def _test_irfinder_result(self,arr_file, bed_file, colorN=0):

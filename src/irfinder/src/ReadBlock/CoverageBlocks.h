@@ -74,12 +74,14 @@ class CoverageBlocksIRFinder : public CoverageBlocks {
 	private:
 		uint AI_warn=0;
 		uint AI_intron=1;
+		double AI_ratio=0.05;
 	public:
 	CoverageBlocksIRFinder(std::string read_type) : CoverageBlocks(read_type){
 	}
-	void setAI(uint AI_warning_level, uint AI_min_intron_coverage){
+	void setAI(uint AI_warning_level, uint AI_min_intron_coverage, double AI_IRratio){
 		AI_warn=AI_warning_level;
 		AI_intron=AI_min_intron_coverage;
+		AI_ratio=AI_IRratio;
 	}
 		int WriteOutput(std::ostream *os, std::ostream *osAI, const JunctionCount &JC, const SpansPoint &SP, int directionality = 0) const;
 };

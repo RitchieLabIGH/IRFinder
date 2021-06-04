@@ -569,21 +569,17 @@ int CoverageBlocksIRFinder::WriteOutput(std::ostream *os, std::ostream *os_ai,
 					*os << JCleft << "\t" << JCright << "\t" << JCexact << "\t";
 				}
 				MaxJC = std::max(JCleft, JCright);
-				if (intronTrimmedMean == 0 && JCleft == 0 && JCright == 0) {
-					*os << "0" << "\t";
-				} else {
+				double IRratio=0;
+				if (!( intronTrimmedMean == 0 && JCleft == 0 && JCright == 0 )) {
 					if (long_read) {
-						*os
-								<< (intronTrimmedMean
-										/ (intronTrimmedMean + JCexact))
-								<< "\t";
+						IRratio= (intronTrimmedMean
+										/ (intronTrimmedMean + JCexact));
+
 					} else {
-						*os << (intronTrimmedMean / (intronTrimmedMean + MaxJC))
-								<< "\t";
+						IRratio= (intronTrimmedMean / (intronTrimmedMean + MaxJC));
 					}
-
 				}
-
+				*os << IRratio << "\t";
 				// Final column -- don't try to be tri-state. Just say if it is "not ok".
 				// Not ok due to:
 				//	- insufficient spliced depth
@@ -613,7 +609,7 @@ int CoverageBlocksIRFinder::WriteOutput(std::ostream *os, std::ostream *os_ai,
 					*os << "-" << "\n";
 				}
 
-				if (warn_level <= AI_warn && intronTrimmedMean >= AI_intron) {
+				if (warn_level <= AI_warn && intronTrimmedMean >= AI_intron && IRratio >= AI_ratio && ! long_read ) {
 					uint64_t AI_start =
 							intronStart - 15 < 0 ? 0 : intronStart - 15;
 					uint64_t AI_end = intronEnd + 15;

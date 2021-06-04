@@ -35,8 +35,8 @@ void checkArguments(std::string outputDir, std::string s_inCoverageBlocks,
 			exit(1);
 		}
 	}
-	if ( ! std::regex_match(AI_level, std::regex("^[0-9]+:[0-9]+$") )){
-		std::cerr << "Error! AI level has to be a string of two integers separated by a semicolumn.\n";
+	if ( ! std::regex_match(AI_level, std::regex("^[0-9]+:[0-9]+:0.[0-9]+$") )){
+		std::cerr << "Error! AI level has to be a string of two integers and a double separated by a semicolumn.\n";
 		std::cerr << "Example: 1:2  -> output all the introns with at most the warning level of 1 and with at least 2 as IntronDepth.\n";
 		exit(1);
 	}
@@ -65,8 +65,9 @@ int main(int argc, char *argv[]) {
 			s_inROI, read_type, input_BAM, AI_level);
 
 	std::smatch ai_match;
-	std::regex_match(AI_level, ai_match, std::regex("([0-9]+):([0-9]+)"));
+	std::regex_match(AI_level, ai_match, std::regex("([0-9]+):([0-9]+):(0.[0-9]+)"));
 	uint AI_warn = std::stoi(ai_match[1]), AI_intron=std::stoi(ai_match[2]);
+	double AI_ratio=std::stod(ai_match[3]);
 	std::cout << "IRFinder run with options:\n"
 			<< " - Output Dir:          \t" << outputDir << "\n"
 			<< " - Main intron ref.:    \t" << s_inCoverageBlocks << "\n"
@@ -74,7 +75,7 @@ int main(int argc, char *argv[]) {
 			<< " - Read spans ref.:     \t" << s_inSpansPoint << "\n"
 			<< " - Optional ROI ref.:   \t" << s_inROI << "\n"
 			<< " - Read type:           \t" << read_type << "\n"
-			<< " - AI levels:           \t" << AI_warn << ":" << AI_intron << "\n"
+			<< " - AI levels:           \t" << AI_warn << ":" << AI_intron << ":" << AI_ratio << "\n"
 			<< " - Input BAM:           \t" << input_BAM << "\n\n";
 	std::cout.flush();
 
@@ -190,21 +191,21 @@ int main(int argc, char *argv[]) {
 	outCoverageBlocks.open(outputDir + "/IRFinder-IR-nondir.txt",
 			std::ifstream::out);
 
-	if ( AI_warn > 0 ){
+	if ( AI_warn > 0 && read_type == "SR" ){
 		outCoverageBlocksAI.open(outputDir + "/IRFinder-IR-nondir-AI.txt",
 				std::ifstream::out);
 	}
-	oCoverageBlocks.setAI(AI_warn, AI_intron);
+	oCoverageBlocks.setAI(AI_warn, AI_intron, AI_ratio);
 	oCoverageBlocks.WriteOutput(&outCoverageBlocks, &outCoverageBlocksAI, oJuncCount, oSpansPoint);
 	outCoverageBlocks.flush();
 	outCoverageBlocks.close();
-	if ( AI_warn > 0 ){
+	if ( AI_warn > 0  && read_type == "SR" ){
 		outCoverageBlocksAI.flush(); outCoverageBlocksAI.close();
 	}
 	if (directionality != 0) {
 		outCoverageBlocks.open(outputDir + "/IRFinder-IR-dir.txt",
 				std::ifstream::out);
-		if ( AI_warn > 0 ){
+		if ( AI_warn > 0 && read_type == "SR" ){
 		outCoverageBlocksAI.open(outputDir + "/IRFinder-IR-dir-AI.txt",
 			std::ifstream::out);
 		}
@@ -212,7 +213,7 @@ int main(int argc, char *argv[]) {
 				directionality); // Directional.
 		outCoverageBlocks.flush();
 		outCoverageBlocks.close();
-		if ( AI_warn > 0 ){
+		if ( AI_warn > 0 && read_type == "SR" ){
 			outCoverageBlocksAI.flush(); outCoverageBlocksAI.close();
 		}
 	}

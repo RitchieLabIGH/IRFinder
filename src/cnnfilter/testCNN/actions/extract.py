@@ -1,8 +1,5 @@
 import numpy as np
-import os
-from scipy import interpolate
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
+from scipy.interpolate import interp1d
 
 
 
@@ -41,8 +38,8 @@ def generateImagesArrayGreyFromRegion(region, img_size=None):
         kindinterp = "zero"  #"linear"
 
 
-    f0 = interpolate.interp1d(np.arange(0, region_size-30), reads_img[15:-15,0], kind=kindinterp)
-    f1 = interpolate.interp1d(np.arange(0, region_size-30), reads_img[15:-15,1], kind=kindinterp)
+    f0 = interp1d(np.arange(0, region_size-30), reads_img[15:-15,0], kind=kindinterp)
+    f1 = interp1d(np.arange(0, region_size-30), reads_img[15:-15,1], kind=kindinterp)
 
     reads_imgd1 = np.array([np.array(reads_img[0:15, 0])])
     reads_imgd1 = np.append(reads_imgd1, f0(np.arange(0, (img_size - 30)) * ((region_size - 31) / (img_size - 30))))
@@ -57,7 +54,7 @@ def generateImagesArrayGreyFromRegion(region, img_size=None):
 
     reads_img2 = np.array([reads_imgd1,reads_imgd2])
 
-    reads_img2 = np.expand_dims(np.rot90(np.round(reads_img2).astype("uint8"), k=3), axis=2)
+    reads_img2 = np.expand_dims(np.rot90(np.round(reads_img2).astype("float32"), k=3), axis=2)
 
     return reads_img2, None
 

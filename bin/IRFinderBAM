@@ -20,8 +20,14 @@ function usage() {
     echo "    -l Long reads flag." >&2
 	echo "    -v Verbose." >&2
 	echo "  additional :" >&2	
-	echo "    -w int : Warning level accepted to output the intron in the AI array file. Use 0 to disable. Default: 1" >&2
-	echo "    -i int : Minimum intron depth accepted to output the intron in the AI array file. Default: 1" >&2
+	echo "    -r double : Minimum IRratio accepted to consider the intron for the CNN validation. Default: 0.05 " >&2
+	echo "    -w int : Warning level accepted to consider the intron for the CNN validation. Default: 1" >&2
+	echo "         0: Disabled " >&2
+	echo "         1: Only without warning " >&2
+	echo "         2: Include NonUniformIntronCover  " >&2	
+	echo "         3: Include also MinorIsoform" >&2
+	echo "         4: Include also LowSplicing" >&2
+	echo "         5: Include also LowCover ( consider all )" >&2
 	echo "" >&2
 	exit 1
 }
@@ -36,13 +42,13 @@ RETRO=0
 READ_TYPE="SR"
 AI_WARN=1
 AI_INTRON=1
-
+AI_RATIO="0.05"
 
 if [ $# -eq 0 ] || [[ $1 == "--help"  ]] ; then
 	usage
 fi
 
-while getopts ":r:t:d:i:w:vhl" opt; do
+while getopts ":r:t:d:i:w:r:vhl" opt; do
 	case $opt in
 		r)
 			# Reference directory.
@@ -57,12 +63,19 @@ while getopts ":r:t:d:i:w:vhl" opt; do
 			THREADS=$OPTARG
 			;;
         i)
-			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.)
 			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
 				echo "Argument error: -i $OPTARG, number of warning must be an integer." >&2
 				exit 1
 			fi
 			AI_INTRON=$OPTARG
+			;;
+		r)
+			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.)
+			if [[ ! $OPTARG =~ ^0\.[0-9]+$ ]]; then
+				echo "Argument error: -r $OPTARG, ratio must be a float number between 0 and 1 not included." >&2
+				exit 1
+			fi
+			AI_RATIO=$OPTARG
 			;;
         w)
 			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.)
@@ -132,14 +145,14 @@ if [ $VERBOSE -eq 1 ];then
     ${REF}/IRFinder/ref-cover.bed \
     ${REF}/IRFinder/ref-sj.ref \
     ${REF}/IRFinder/ref-read-continues.ref \
-    ${REF}/IRFinder/ref-ROI.bed ${READ_TYPE} "${AI_WARN}:${AI_INTRON}" $1  2>> $OUTPUTDIR/logs/irfinder.stderr | tee -a $OUTPUTDIR/logs/irfinder.stdout  
+    ${REF}/IRFinder/ref-ROI.bed ${READ_TYPE} "${AI_WARN}:${AI_INTRON}:${AI_RATIO}" $1  2>> $OUTPUTDIR/logs/irfinder.stderr | tee -a $OUTPUTDIR/logs/irfinder.stdout  
     cat $OUTPUTDIR/logs/irfinder.stderr
 else
     ${LIBEXEC}/irfinder ${OUTPUTDIR} \
     ${REF}/IRFinder/ref-cover.bed \
     ${REF}/IRFinder/ref-sj.ref \
     ${REF}/IRFinder/ref-read-continues.ref \
-    ${REF}/IRFinder/ref-ROI.bed ${READ_TYPE} "${AI_WARN}:${AI_INTRON}" $1 >> $OUTPUTDIR/logs/irfinder.stdout 2>>  $OUTPUTDIR/logs/irfinder.stderr 
+    ${REF}/IRFinder/ref-ROI.bed ${READ_TYPE} "${AI_WARN}:${AI_INTRON}:${AI_RATIO}" $1 >> $OUTPUTDIR/logs/irfinder.stdout 2>>  $OUTPUTDIR/logs/irfinder.stderr 
 fi
  
 
@@ -154,5 +167,16 @@ N_WARNINGS=$(wc -l $OUTPUTDIR/WARNINGS | awk '{print $1}' )
 if [ $N_WARNINGS -gt 0 ]; then
     logger "Process completed with warnings. Check $OUTPUTDIR/WARNINGS " >&2
 fi
+
+if [[ -f $OUTPUTDIR/IRFinder-IR-nondir-AI.txt ]]; then
+    logger "---"
+    logger "[ " $(date) " ] Running CNN validator " 
+    logger "---"
+    ${LIBEXEC}/irfinder_cnn -d ${OUTPUTDIR} -m ${LIBEXEC}/model/ && rm ${OUTPUTDIR}/*-AI.txt
+    logger "---"
+    logger "[ " $(date) " ] CNN validator completed" 
+    logger "---"
+fi
+
 
 
