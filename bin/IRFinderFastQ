@@ -27,9 +27,14 @@ function usage() {
 	echo "    -y STRING: an extra string that is parsed to STAR for reads alignment." >&2
 	echo "" >&2	
 	echo "  additional :" >&2	
-	echo "    -w Warning level accepted to output the intron in the AI array file. Use 0 to disable. Default: 1" >&2
-	echo "    -i Minimum intron depth accepted to output the intron in the AI array file. Default: 1" >&2
-	echo "" >&2
+	echo "    -R double : Minimum IRratio accepted to consider the intron for the CNN validation. Default: 0.05 " >&2
+	echo "    -w int : Warning level accepted to consider the intron for the CNN validation. Default: 1" >&2
+	echo "         0: Disabled " >&2
+	echo "         1: Only without warning " >&2
+	echo "         2: Include NonUniformIntronCover  " >&2	
+	echo "         3: Include also MinorIsoform" >&2
+	echo "         4: Include also LowSplicing" >&2
+	echo "         5: Include also LowCover ( consider all )" >&2
 	exit 1
 }
 
@@ -52,13 +57,13 @@ VERBOSE=0
 SORTMEM=$(getSortingMem )
 AI_WARN=1
 AI_INTRON=1
-
+AI_RATIO="0.05"
 
 if [ $# -eq 0 ] || [[ $1 == "--help"  ]] ; then
 	usage
 fi
 
-while getopts ":m:r:a:t:d:s:S:uM:i:w:y:vh" opt; do
+while getopts ":m:r:a:t:d:s:S:R:uM:i:w:y:vh" opt; do
 	case $opt in
 		r)
 			# Reference directory.
@@ -85,6 +90,13 @@ while getopts ":m:r:a:t:d:s:S:uM:i:w:y:vh" opt; do
 		d)
 			OUTPUTDIR=$OPTARG
 			;;
+        R)
+			if [[ ! $OPTARG =~ ^0\.[0-9]+$ ]]; then
+				echo "Argument error: -r $OPTARG, ratio must be a float number between 0 and 1 not included." >&2
+				exit 1
+			fi
+			AI_RATIO=$OPTARG
+			;;			
 		s)
 			## STAR memory mode (must be from fixed list).
 			if [[ $OPTARG == "NoSharedMemory" || $OPTARG == "LoadAndKeep" || $OPTARG == "LoadAndRemove" ]]; then

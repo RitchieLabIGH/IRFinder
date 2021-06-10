@@ -20,7 +20,7 @@ function usage() {
     echo "    -l Long reads flag." >&2
 	echo "    -v Verbose." >&2
 	echo "  additional :" >&2	
-	echo "    -r double : Minimum IRratio accepted to consider the intron for the CNN validation. Default: 0.05 " >&2
+	echo "    -R double : Minimum IRratio accepted to consider the intron for the CNN validation. Default: 0.05 " >&2
 	echo "    -w int : Warning level accepted to consider the intron for the CNN validation. Default: 1" >&2
 	echo "         0: Disabled " >&2
 	echo "         1: Only without warning " >&2
@@ -48,7 +48,7 @@ if [ $# -eq 0 ] || [[ $1 == "--help"  ]] ; then
 	usage
 fi
 
-while getopts ":r:t:d:i:w:r:vhl" opt; do
+while getopts ":r:t:d:i:w:R:vhl" opt; do
 	case $opt in
 		r)
 			# Reference directory.
@@ -69,8 +69,7 @@ while getopts ":r:t:d:i:w:r:vhl" opt; do
 			fi
 			AI_INTRON=$OPTARG
 			;;
-		r)
-			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.)
+		R)
 			if [[ ! $OPTARG =~ ^0\.[0-9]+$ ]]; then
 				echo "Argument error: -r $OPTARG, ratio must be a float number between 0 and 1 not included." >&2
 				exit 1
@@ -78,7 +77,6 @@ while getopts ":r:t:d:i:w:r:vhl" opt; do
 			AI_RATIO=$OPTARG
 			;;
         w)
-			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.)
 			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
 				echo "Argument error: -w $OPTARG, number of intron depth must be an integer." >&2
 				exit 1
