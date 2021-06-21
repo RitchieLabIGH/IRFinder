@@ -24,10 +24,6 @@ function usage() {
   	echo "    -v Verbose ( Default: print the log only in the output/logs/irfinder.std[out|err] )" >&2 
 	echo "    -y STRING: an extra string that is parsed to Minimap2 for reads alignment. Default: '-uf -k14' " >&2
 	echo "" >&2
-	echo "  additional :" >&2	
-	echo "    -w Warning level accepted to output the intron in the AI array file. Use 0 to disable. Default: 1" >&2
-	echo "    -i Minimum intron depth accepted to output the intron in the AI array file. Default: 1" >&2
-	echo "" >&2
 	exit 1
 }
 
@@ -87,22 +83,6 @@ while getopts ":m:r:t:d:E:x:uM:y:i:w:vh" opt; do
 		u)
 			DOSORT=0
 		    ;;
-        i)
-			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.)
-			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
-				echo "Argument error: -i $OPTARG, number of warning must be an integer." >&2
-				exit 1
-			fi
-			AI_INTRON=$OPTARG
-			;;
-        w)
-			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.)
-			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
-				echo "Argument error: -w $OPTARG, number of intron depth must be an integer." >&2
-				exit 1
-			fi
-			AI_WARN=$OPTARG
-			;;		    
 		M)
 			#Max sort memory in MB.
 			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
@@ -172,7 +152,7 @@ if [[ "${VERBOSE}" == "1" ]]; then
     VERBOSE_FLAG=" -v " 
 fi
 
-IRF_RUNMODE="Long" $(dirname "$(readlink -nf "$BASH_SOURCE")")/IRFinderBAM $VERBOSE_FLAG -i $AI_INTRON -w $AI_WARN -l -r $REF -t $THREADS -d $OUTPUTDIR $OUTPUTDIR/Unsorted.bam || exit 1
+IRF_RUNMODE="Long" $(dirname "$(readlink -nf "$BASH_SOURCE")")/IRFinderBAM $VERBOSE_FLAG -l -r $REF -t $THREADS -d $OUTPUTDIR $OUTPUTDIR/Unsorted.bam || exit 1
 
 
 if [ $DOSORT -eq 1 ]; then

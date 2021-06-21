@@ -30,7 +30,7 @@ function usage() {
 	echo "         2: Discard the LowCover and LowSplicing  ( Default ) " >&2	
 	echo "         3: Discard the LowCover, LowSplicing and MinorIsoform" >&2
 	echo "         4: Discard the LowCover, LowSplicing, MinorIsoform and NonUniformIntronCover" >&2
-	echo "    -m 'deseq' if you want to use DESeq2, otherwise SUPPA2 method ( [empirical|suppa] or classical ). Defualt: deseq " >&2
+	echo "    -m 'deseq' if you want to use DESeq2, otherwise SUPPA2 method ( [empirical|suppa] or classical ). Default: deseq " >&2
 	echo "    -o The output folder. Defualt: ./diff/ " >&2
 	echo "    -v Verbose." >&2
     echo "" >&2

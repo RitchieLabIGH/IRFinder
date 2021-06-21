@@ -266,7 +266,7 @@ if [[ "${VERBOSE}" == "1" ]]; then
     VERBOSE_FLAG=" -v " 
 fi
 
-IRF_RUNMODE="FastQ" $(dirname "$(readlink -nf "$BASH_SOURCE")")/IRFinderBAM $VERBOSE_FLAG -i $AI_INTRON -w $AI_WARN -r $REF -t $THREADS -d $OUTPUTDIR $OUTPUTDIR/Unsorted.bam || exit 1
+IRF_RUNMODE="FastQ" $(dirname "$(readlink -nf "$BASH_SOURCE")")/IRFinderBAM $VERBOSE_FLAG -i $AI_INTRON -w $AI_WARN -R $AI_RATIO -r $REF -t $THREADS -d $OUTPUTDIR $OUTPUTDIR/Unsorted.bam || exit 1
 
 
 if [ $DOSORT -eq 1 ]; then
