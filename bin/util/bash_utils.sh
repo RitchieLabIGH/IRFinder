@@ -99,11 +99,13 @@ function checkDeseq(){
 	DESeqVersion=$(Rscript -e 'installed.packages()' | awk  'BEGIN {v=0} $1=="Version" {v=1; } v==1 && $1 == "DESeq2" { gsub("\"", ""); print $2;v=0 } ' )
 	
 	if [[ "${DESeqVersion}" == "" ]]; then
-		echo "DESeq2 not installed. "
-		exit 1
-	else
-		logger "DESeq2 version $DESeqVersion"
+		DESeqVersion=$(Rscript -e 'installed.packages()' | awk  'BEGIN {v=0} $NF=="Version" {v=1; } v==1 && $1 == "DESeq2" { gsub("\"", ""); print $NF;v=0 } ' )
+		if [[ "${DESeqVersion}" == "" ]]; then
+			echo "DESeq2 not installed. "
+			exit 1
+		fi
 	fi
+	logger "DESeq2 version $DESeqVersion"
 }
 
 function setThreads(){
