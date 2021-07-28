@@ -32,19 +32,21 @@ RUN	pip3 install -U --no-cache-dir numpy pandas \
 RUN mkdir -p /Utils/bin/ && \
     cd /Utils/ && \
     git clone https://github.com/alexdobin/STAR.git && \
-    cd STAR/source && \
+	cd ./STAR &&  git checkout tags/2.7.0f  && \
+    cd ./source && \
     make STAR && \
     ln -s /Utils/STAR/source/STAR /Utils/bin/STAR && \
 	cd /Utils && \
 	git clone https://github.com/comprna/SUPPA.git && \
-	echo "#!/usr/bin/env python3" > /Utils/SUPPA/suppa.py.tmp && \
+	cd ./SUPPA && git checkout tags/v2.3 && \
+	echo '#!/usr/bin/env python3' > /Utils/SUPPA/suppa.py.tmp && \
 	cat /Utils/SUPPA/suppa.py >> /Utils/SUPPA/suppa.py.tmp && \
 	mv /Utils/SUPPA/suppa.py.tmp /Utils/SUPPA/suppa.py && \
 	chmod +x /Utils/SUPPA/suppa.py && \
 	ln -s /Utils/SUPPA/suppa.py /Utils/bin/suppa.py
 
 RUN cd /Utils/ && git clone https://github.com/lh3/minimap2 && \
-	cd minimap2 && make && \
+	cd minimap2 && git checkout tags/v2.3 && make && \
 	ln -s /Utils/minimap2/minimap2 /Utils/bin/minimap2	
 
 	 

@@ -10,7 +10,7 @@ inline bool file_exists(const std::string &name) {
 
 void checkArguments(std::string outputDir, std::string s_inCoverageBlocks,
 		std::string s_inSJ, std::string s_inSpansPoint, std::string s_inROI,
-		std::string read_type, std::string input_BAM, std::string AI_level) {
+		std::string read_type, std::string input_BAM, std::string AI_level, std::string jitter) {
 
 	if (read_type != "LR" && read_type != "SR") {
 		std::cerr << "Error! read type must be LR or SR\n";
@@ -40,14 +40,18 @@ void checkArguments(std::string outputDir, std::string s_inCoverageBlocks,
 		std::cerr << "Example: 1:2  -> output all the introns with at most the warning level of 1 and with at least 2 as IntronDepth.\n";
 		exit(1);
 	}
+	if ( ! std::regex_match(jitter, std::regex("^[0-9]+$") )){
+		std::cerr << "Error! Jitter must be an integer number.\n";
+		exit(1);
+	}
 }
 
 
 int main(int argc, char *argv[]) {
 
-	if (argc != 9) {
+	if (argc != 10) {
 		std::cerr << argc << " "
-				<< "Usage: IRFinder output-directory ref-coverage.bed ref-SJ.ref ref-spans-point.ref ROI-named.bed(or NULL) [LR|SR] AI_level input.bam"<< std::endl;
+				<< "Usage: IRFinder output-directory ref-coverage.bed ref-SJ.ref ref-spans-point.ref ROI-named.bed(or NULL) [LR|SR] AI_level jitter input.bam"<< std::endl;
 		for ( int i=0 ; i< argc; i++){
 			std::cerr << " - " << argv[i] << "\n";
 		}
@@ -60,9 +64,10 @@ int main(int argc, char *argv[]) {
 	std::string s_inROI = argv[5];
 	std::string read_type = argv[6];
 	std::string AI_level = argv[7];
-	std::string input_BAM = argv[8];
+	std::string jitter = argv[8];
+	std::string input_BAM = argv[9];
 	checkArguments(outputDir, s_inCoverageBlocks, s_inSJ, s_inSpansPoint,
-			s_inROI, read_type, input_BAM, AI_level);
+			s_inROI, read_type, input_BAM, AI_level, jitter);
 
 	std::smatch ai_match;
 	std::regex_match(AI_level, ai_match, std::regex("([0-9]+):([0-9]+):(0.[0-9]+)"));
@@ -74,9 +79,14 @@ int main(int argc, char *argv[]) {
 			<< " - Splice junction ref.:\t" << s_inSJ << "\n"
 			<< " - Read spans ref.:     \t" << s_inSpansPoint << "\n"
 			<< " - Optional ROI ref.:   \t" << s_inROI << "\n"
-			<< " - Read type:           \t" << read_type << "\n"
-			<< " - AI levels:           \t" << AI_warn << ":" << AI_intron << ":" << AI_ratio << "\n"
-			<< " - Input BAM:           \t" << input_BAM << "\n\n";
+			<< " - Read type:           \t" << read_type << "\n";
+	if ( read_type == "LR") {
+		std::cout << " - Jitter:              \t" << jitter << "\n";
+	} else {
+		std::cout << " - AI levels:           \t" << AI_warn << ":" << AI_intron << ":" << AI_ratio << "\n";
+	}
+
+	std::cout 	<< " - Input BAM:           \t" << input_BAM << "\n\n";
 	std::cout.flush();
 
 	std::cout << "Preparing the reference:\n";
@@ -194,6 +204,9 @@ int main(int argc, char *argv[]) {
 	if ( AI_warn > 0 && read_type == "SR" ){
 		outCoverageBlocksAI.open(outputDir + "/IRFinder-IR-nondir-AI.txt",
 				std::ifstream::out);
+	}
+	if ( read_type == "LR"){
+		oCoverageBlocks.setJitter(std::stoi(jitter));
 	}
 	oCoverageBlocks.setAI(AI_warn, AI_intron, AI_ratio);
 	oCoverageBlocks.WriteOutput(&outCoverageBlocks, &outCoverageBlocksAI, oJuncCount, oSpansPoint);

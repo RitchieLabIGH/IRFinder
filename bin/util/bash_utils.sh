@@ -35,14 +35,9 @@ function checkSamtools() {
 
 function getMem(){
     local MEMK=`awk '($1 ~ /^MemTotal:/) {print $2}' < /proc/meminfo`
-    echo $(($MEMK/1000))
+    echo $(( $MEMK/1000 ))
 }
 
-function getSortingMem() {
-    MEMM=$(getMem)
-    SORTMEM=$(echo "${MEMM}" | awk '{if ($1 > 10000 ) { print 10000 } else { if ($1 < 500) { print 500 } else { print $1 }  }   }' )
-    echo $SORTMEM 
-}
 
 function checkStar(){
     MEMM=$(getMem)

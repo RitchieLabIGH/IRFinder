@@ -18,7 +18,7 @@ function usage() {
 	echo "  optional:" >&2
 	echo "    -a Adaptor sequence: 'none' to disable. Default: Illumina Universal is trimmed." >&2
 	echo "    -d Output Directory: Default is the current directory." >&2
-	echo "    -M Sort memory. Maximum memory to use for sort, in MB. Default, auto-detected no greater than 10,000MB." >&2
+	echo "    -M Sort memory. Maximum memory to use for sort for each thread, in MB. Default: 768M" >&2
 	echo "    -s STAR memory mode: NoSharedMemory (default), LoadAndKeep, LoadAndRemove." >&2
 	echo "    -S STAR executable: Default is 'STAR'." >&2
     echo "    -t Threads: The number of physical CPUs to use by IRFinder. When ommited (default), IRFinder will use all physical CPUs." >&2
@@ -54,7 +54,7 @@ EXTRAADAPT=
 EXTRAREADFILESCOMMAND=		
 HAS_FIFO=0
 VERBOSE=0
-SORTMEM=$(getSortingMem )
+SORTMEM=768
 AI_WARN=1
 AI_INTRON=1
 AI_RATIO="0.05"
@@ -272,8 +272,8 @@ IRF_RUNMODE="FastQ" $(dirname "$(readlink -nf "$BASH_SOURCE")")/IRFinderBAM $VER
 if [ $DOSORT -eq 1 ]; then
     logger "---"
     logger "[ " $(date) " ] Sorting the bam file" 
-    echo "---- samtools sort  -@ $THREADS -o $OUTPUTDIR/Sorted.bam $OUTPUTDIR/Unsorted.bam  ---"  >> $OUTPUTDIR/logs/samtools.log && \
-    samtools sort  -@ $THREADS -o $OUTPUTDIR/Sorted.bam $OUTPUTDIR/Unsorted.bam &>> $OUTPUTDIR/logs/samtools.log && \
+    echo "---- samtools sort   -@ $THREADS -m ${SORTMEM}M  -o $OUTPUTDIR/Sorted.bam $OUTPUTDIR/Unsorted.bam  ---"  >> $OUTPUTDIR/logs/samtools.log && \
+    samtools sort   -@ $THREADS -m ${SORTMEM}M  -o $OUTPUTDIR/Sorted.bam $OUTPUTDIR/Unsorted.bam &>> $OUTPUTDIR/logs/samtools.log && \
     logger "---" && \
     logger "[ " $(date) " ] Indexing the sorted bam file"  && \
     echo "---- samtools index -@ $THREADS $OUTPUTDIR/Sorted.bam ---" >> $OUTPUTDIR/logs/samtools.log && \

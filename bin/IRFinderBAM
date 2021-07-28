@@ -18,6 +18,7 @@ function usage() {
 	echo "  optional:" >&2
 	echo "    -d string : Output Directory. Default is the current directory." >&2
     echo "    -l Long reads flag." >&2
+    echo "    -j Jitter, consider the position around the splice sites to compensate sequencing errors ( Long reads only, integer number )." >&2
 	echo "    -v Verbose." >&2
 	echo "  additional :" >&2	
 	echo "    -R double : Minimum IRratio accepted to consider the intron for the CNN validation. Default: 0.05 " >&2
@@ -43,12 +44,13 @@ READ_TYPE="SR"
 AI_WARN=1
 AI_INTRON=1
 AI_RATIO="0.05"
+JITTER="3"
 
 if [ $# -eq 0 ] || [[ $1 == "--help"  ]] ; then
 	usage
 fi
 
-while getopts ":r:t:d:i:w:R:vhl" opt; do
+while getopts ":r:t:d:i:w:R:j:vhl" opt; do
 	case $opt in
 		r)
 			# Reference directory.
@@ -82,6 +84,13 @@ while getopts ":r:t:d:i:w:R:vhl" opt; do
 				exit 1
 			fi
 			AI_WARN=$OPTARG
+			;;	
+	    j)
+			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
+				echo "Argument error: -j $OPTARG, jitter must be an integer." >&2
+				exit 1
+			fi
+			JITTER=$OPTARG
 			;;						
 		d)
 			OUTPUTDIR=$OPTARG
@@ -143,14 +152,14 @@ if [ $VERBOSE -eq 1 ];then
     ${REF}/IRFinder/ref-cover.bed \
     ${REF}/IRFinder/ref-sj.ref \
     ${REF}/IRFinder/ref-read-continues.ref \
-    ${REF}/IRFinder/ref-ROI.bed ${READ_TYPE} "${AI_WARN}:${AI_INTRON}:${AI_RATIO}" $1  2>> $OUTPUTDIR/logs/irfinder.stderr | tee -a $OUTPUTDIR/logs/irfinder.stdout  
+    ${REF}/IRFinder/ref-ROI.bed ${READ_TYPE} "${AI_WARN}:${AI_INTRON}:${AI_RATIO}" "${JITTER}" $1  2>> $OUTPUTDIR/logs/irfinder.stderr | tee -a $OUTPUTDIR/logs/irfinder.stdout  
     cat $OUTPUTDIR/logs/irfinder.stderr
 else
     ${LIBEXEC}/irfinder ${OUTPUTDIR} \
     ${REF}/IRFinder/ref-cover.bed \
     ${REF}/IRFinder/ref-sj.ref \
     ${REF}/IRFinder/ref-read-continues.ref \
-    ${REF}/IRFinder/ref-ROI.bed ${READ_TYPE} "${AI_WARN}:${AI_INTRON}:${AI_RATIO}" $1 >> $OUTPUTDIR/logs/irfinder.stdout 2>>  $OUTPUTDIR/logs/irfinder.stderr 
+    ${REF}/IRFinder/ref-ROI.bed ${READ_TYPE} "${AI_WARN}:${AI_INTRON}:${AI_RATIO}" "${JITTER}" $1 >> $OUTPUTDIR/logs/irfinder.stdout 2>>  $OUTPUTDIR/logs/irfinder.stderr 
 fi
  
 

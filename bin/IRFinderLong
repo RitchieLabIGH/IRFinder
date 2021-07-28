@@ -16,13 +16,14 @@ function usage() {
 	echo "" >&2
 	echo "  optional:" >&2
 	echo "    -d Output Directory: Default is the current directory." >&2
-	echo "    -M Sort memory. Maximum memory to use for sort, in MB. Default, auto-detected no greater than 10,000MB." >&2
+	echo "    -M Sort memory. Maximum memory to use for sort for each thread, in MB. Default: 768." >&2
 	echo "    -x Minimap2 preset: splice (default), map-[pb|ont], ava-[pb|ont], asm[5|10|20], sr. see minimap2.1 for details." >&2
 	echo "    -E Minimap2 executable: Default is 'minimap2'." >&2
     echo "    -t Threads: The number of physical CPUs to use by IRFinder. When ommited (default), IRFinder will use all physical CPUs." >&2
   	echo "    -u Unsorted output: Do not sort the read fragment BAM file." >&2 
   	echo "    -v Verbose ( Default: print the log only in the output/logs/irfinder.std[out|err] )" >&2 
 	echo "    -y STRING: an extra string that is parsed to Minimap2 for reads alignment. Default: '-uf -k14' " >&2
+    echo "    -j Jitter, consider the position around the splice sites to compensate sequencing errors ( integer number )." >&2	
 	echo "" >&2
 	exit 1
 }
@@ -36,15 +37,16 @@ DOSORT=1
 MINIMAP_EXTRA="-uf -k14"
 MINIMAP_EXEC=minimap2
 VERBOSE=0
-SORTMEM=$(getSortingMem )
+SORTMEM=768
 AI_WARN=1
 AI_INTRON=1
+JITTER=3
 
 if [ $# -eq 0 ] || [[ $1 == "--help"  ]] ; then
 	usage
 fi
 
-while getopts ":m:r:t:d:E:x:uM:y:i:w:vh" opt; do
+while getopts ":m:j:r:t:d:E:x:uM:y:i:w:vh" opt; do
 	case $opt in
 		r)
 			# Reference directory.
@@ -71,6 +73,13 @@ while getopts ":m:r:t:d:E:x:uM:y:i:w:vh" opt; do
 				exit 1
 			fi
 			;;
+	    j)
+			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
+				echo "Argument error: -j $OPTARG, jitter must be an integer." >&2
+				exit 1
+			fi
+			JITTER=$OPTARG
+			;;				
 		E)
 			## Minimap executable. (must be executable!)
 			if [ -x "$OPTARG" -a ! -d "$OPTARG" ]; then
@@ -152,7 +161,7 @@ if [[ "${VERBOSE}" == "1" ]]; then
     VERBOSE_FLAG=" -v " 
 fi
 
-IRF_RUNMODE="Long" $(dirname "$(readlink -nf "$BASH_SOURCE")")/IRFinderBAM $VERBOSE_FLAG -l -r $REF -t $THREADS -d $OUTPUTDIR $OUTPUTDIR/Unsorted.bam || exit 1
+IRF_RUNMODE="Long" $(dirname "$(readlink -nf "$BASH_SOURCE")")/IRFinderBAM $VERBOSE_FLAG -l -r $REF -t $THREADS -j $JITTER -d $OUTPUTDIR $OUTPUTDIR/Unsorted.bam || exit 1
 
 
 if [ $DOSORT -eq 1 ]; then

@@ -513,28 +513,29 @@ int CoverageBlocksIRFinder::WriteOutput(std::ostream *os, std::ostream *os_ai,
 					fillHist(hist, BEDrec.chrName,
 							{ { intronEnd - 55, intronEnd - 5 } }, measureDir);
 					*os << trimmedMeanFromHist(hist, 40) << "\t";
-
-					if (long_read) {
-						for (uint i = 0; i <= 4; i++) {
-							JCleft += JC.lookupLeft(BEDrec.chrName,
-									intronStart - 2 + i, measureDir);
-							JCright += JC.lookupRight(BEDrec.chrName,
-									intronEnd - 2 + i, measureDir);
-							for (uint j = 0; j <= 4; j++) {
-								JCexact += JC.lookup(BEDrec.chrName,
-										intronStart - 2 + i, intronEnd - 2 + j,
-										measureDir);
+					JCleft = JC.lookupLeft(BEDrec.chrName, intronStart,
+							measureDir);
+					JCright = JC.lookupRight(BEDrec.chrName, intronEnd,
+							measureDir);
+					JCexact = JC.lookup(BEDrec.chrName, intronStart, intronEnd,
+							measureDir);
+					if (long_read && jitter > 0) {
+						for (int i = -jitter; i <= jitter; i++) {
+							if (i != 0) {
+								JCleft += JC.lookupLeft(BEDrec.chrName,
+										intronStart + i, measureDir);
+								JCright += JC.lookupRight(BEDrec.chrName,
+										intronEnd + i, measureDir);
+							}
+							for (int j = -jitter; j <= jitter; j++) {
+								if (j != 0 && i != 0) {
+									JCexact += JC.lookup(BEDrec.chrName,
+											intronStart + i, intronEnd + j,
+											measureDir);
+								}
 							}
 						}
-					} else {
-						JCleft = JC.lookupLeft(BEDrec.chrName, intronStart,
-								measureDir);
-						JCright = JC.lookupRight(BEDrec.chrName, intronEnd,
-								measureDir);
-						JCexact = JC.lookup(BEDrec.chrName, intronStart,
-								intronEnd, measureDir);
 					}
-
 					*os << JCleft << "\t" << JCright << "\t" << JCexact << "\t";
 				} else {
 					SPleft = SP.lookup(BEDrec.chrName, intronStart);
@@ -549,49 +550,46 @@ int CoverageBlocksIRFinder::WriteOutput(std::ostream *os, std::ostream *os_ai,
 					fillHist(hist, BEDrec.chrName,
 							{ { intronEnd - 55, intronEnd - 5 } });
 					*os << trimmedMeanFromHist(hist, 40) << "\t";
-					if (long_read) {
-						for (uint i = 0; i <= 4; i++) {
-							JCleft += JC.lookupLeft(BEDrec.chrName,
-									intronStart - 2 + i);
-							JCright += JC.lookupRight(BEDrec.chrName,
-									intronEnd - 2 + i);
-							for (uint j = 0; j <= 4; j++) {
-								JCexact += JC.lookup(BEDrec.chrName,
-										intronStart - 2 + i, intronEnd - 2 + j);
+					JCleft = JC.lookupLeft(BEDrec.chrName, intronStart);
+					JCright = JC.lookupRight(BEDrec.chrName, intronEnd);
+					JCexact = JC.lookup(BEDrec.chrName, intronStart, intronEnd);
+					if (long_read && jitter > 0) {
+						/*uint pre_JCexact=JCexact;*/
+						for (int i = -jitter; i <= jitter; i++) {
+							if (i != 0) {
+								JCleft += JC.lookupLeft(BEDrec.chrName,
+										intronStart + i);
+								JCright += JC.lookupRight(BEDrec.chrName,
+										intronEnd + i);
+							}
+							for (int j = -jitter; j <= jitter; j++) {
+								if (j != 0 && i != 0) {
+									JCexact += JC.lookup(BEDrec.chrName,
+											intronStart + i, intronEnd + j);
+								}
 							}
 						}
-					} else {
-						JCleft = JC.lookupLeft(BEDrec.chrName, intronStart);
-						JCright = JC.lookupRight(BEDrec.chrName, intronEnd);
-						JCexact = JC.lookup(BEDrec.chrName, intronStart,
-								intronEnd);
+						/*To check differences in jitter
+						 * if (pre_JCexact != JCexact  && intronTrimmedMean!= 0 ){
+							std::cerr << BEDrec.chrName << ":" << intronStart << "-"
+									<< intronEnd << "\t"<< pre_JCexact  << " -> " << JCexact << "\n";
+						}*/
 					}
 					*os << JCleft << "\t" << JCright << "\t" << JCexact << "\t";
 				}
 				MaxJC = std::max(JCleft, JCright);
-				double IRratio=0;
-				if (!( intronTrimmedMean == 0 && JCleft == 0 && JCright == 0 )) {
+				double IRratio = 0;
+				if (!(intronTrimmedMean == 0 && JCleft == 0 && JCright == 0)) {
 					if (long_read) {
-						IRratio= (intronTrimmedMean
-										/ (intronTrimmedMean + JCexact));
+						IRratio = (intronTrimmedMean
+								/ (intronTrimmedMean + JCexact));
 
 					} else {
-						IRratio= (intronTrimmedMean / (intronTrimmedMean + MaxJC));
+						IRratio = (intronTrimmedMean
+								/ (intronTrimmedMean + MaxJC));
 					}
 				}
 				*os << IRratio << "\t";
-				// Final column -- don't try to be tri-state. Just say if it is "not ok".
-				// Not ok due to:
-				//	- insufficient spliced depth
-				//  - insufficient exact spliced compared to in-exact spliced depth
-				//  - too much variation between depths & crossings.  ... hmm, but at low depth, high probability of this failing.
-
-				// Can only make a strong exclude call on spliced depth. Describe on the tool website ways to make a call for IR def true / IR def false.
-//				if (JCexact < 10 || JCexact*1.33333333 < max(JCleft, JCright) ) {
-//					*os << "-" << "\n";
-//				}else{
-//					*os << "ok" << "\n";
-//				}
 				uint warn_level = 1;
 				if (JCexact + intronTrimmedMean < lowCover_thr) {
 					*os << "LowCover" << "\n";
@@ -609,7 +607,8 @@ int CoverageBlocksIRFinder::WriteOutput(std::ostream *os, std::ostream *os_ai,
 					*os << "-" << "\n";
 				}
 
-				if (warn_level <= AI_warn && intronTrimmedMean >= AI_intron && IRratio >= AI_ratio && ! long_read ) {
+				if (warn_level <= AI_warn && intronTrimmedMean >= AI_intron
+						&& IRratio >= AI_ratio && !long_read) {
 					uint64_t AI_start =
 							intronStart - 15 < 0 ? 0 : intronStart - 15;
 					uint64_t AI_end = intronEnd + 15;

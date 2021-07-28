@@ -42,12 +42,13 @@ class CoverageBlocks : public ReadBlockProcessor {
 
 		std::vector<BEDrecord> BEDrecords;
 		bool long_read=false;
-
+		int jitter = 3;
 
 	public:
 		CoverageBlocks(std::string read_type) {
 			long_read = read_type == "LR";
 		}
+		void setJitter(int j){jitter=j;};
 		void ProcessBlocks(const FragmentBlocks &fragblock);
 		void ChrMapUpdate(const std::vector<std::string> &chrmap);
 		void loadRef(std::istream &IN);
@@ -76,6 +77,7 @@ class CoverageBlocksIRFinder : public CoverageBlocks {
 		uint AI_intron=1;
 		double AI_ratio=0.05;
 	public:
+
 	CoverageBlocksIRFinder(std::string read_type) : CoverageBlocks(read_type){
 	}
 	void setAI(uint AI_warning_level, uint AI_min_intron_coverage, double AI_IRratio){
@@ -84,6 +86,7 @@ class CoverageBlocksIRFinder : public CoverageBlocks {
 		AI_ratio=AI_IRratio;
 	}
 		int WriteOutput(std::ostream *os, std::ostream *osAI, const JunctionCount &JC, const SpansPoint &SP, int directionality = 0) const;
+
 };
 
 
