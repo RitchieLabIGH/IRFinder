@@ -322,6 +322,7 @@ int BAM2blocks::processAll() {
 					saveMate();
 				}
 			} else {
+				current_read++;
 				running = getNextReadHead(tmp_mate);
 				if (running) {
 					getReadBody(tmp_mate);

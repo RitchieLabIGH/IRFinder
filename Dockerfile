@@ -28,11 +28,15 @@ RUN apt-get update && apt-get install -y gnupg2 && apt-key adv --keyserver hkp:/
 RUN	pip3 install -U --no-cache-dir numpy pandas \
     	scikit-learn scipy \
     	statsmodels
+ 
+RUN	Rscript -e 'options(warn=2); if (!requireNamespace("BiocManager", quietly = TRUE)) { install.packages("BiocManager",lib="/usr/lib/R/library/", force=TRUE) } ; BiocManager::install(c("BiocManager", "tximport", "readr", "RCurl", "DESeq2"), force=TRUE,ask=F,lib="/usr/lib/R/library/", quiet=F)' && \
+	Rscript -e 'installed.packages()' | awk  'BEGIN {v=0} $1=="Version" {v=1; } v==1 && $1 == "DESeq2" { gsub("\"", ""); print $2;v=0 } '
+
 
 RUN mkdir -p /Utils/bin/ && \
     cd /Utils/ && \
     git clone https://github.com/alexdobin/STAR.git && \
-	cd ./STAR &&  git checkout tags/2.7.0f  && \
+	cd ./STAR &&  git checkout tags/2.7.9a  && \
     cd ./source && \
     make STAR && \
     ln -s /Utils/STAR/source/STAR /Utils/bin/STAR && \
@@ -49,10 +53,7 @@ RUN cd /Utils/ && git clone https://github.com/lh3/minimap2 && \
 	cd minimap2 && git checkout tags/v2.3 && make && \
 	ln -s /Utils/minimap2/minimap2 /Utils/bin/minimap2	
 
-	 
-RUN	Rscript -e 'options(warn=2); if (!requireNamespace("BiocManager", quietly = TRUE)) { install.packages("BiocManager",lib="/usr/lib/R/library/", force=TRUE) } ; BiocManager::install(c("BiocManager", "tximport", "readr", "RCurl", "DESeq2"), force=TRUE,ask=F,lib="/usr/lib/R/library/", quiet=F)' && \
-	Rscript -e 'installed.packages()' | awk  'BEGIN {v=0} $1=="Version" {v=1; } v==1 && $1 == "DESeq2" { gsub("\"", ""); print $2;v=0 } '
-
+	
 ADD "https://www.random.org/cgi-bin/randbyte?nbytes=10&format=h" skipcache	
 
 COPY ./bin /IRFinder/bin

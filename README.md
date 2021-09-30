@@ -1,6 +1,10 @@
 
-# IRFinder
-Detecting intron retention from RNA-Seq experiments
+# IRFinder-S
+IRFinder-S is a suite of tools to analyse and explore intron retention events in multiple samples. It comprehends:
+
+- IRFinder : detect intron retention from RNA-Seq experiments. Includes an automatic CNN filter that emulate a visual inspection to validate the events.
+- IRBase   : visualize and share IRFinder's results. 
+
 To start using IRFinder, read our [wiki user manual.](https://github.com/RitchieLabIGH/IRFinder/wiki)
 
 [CHANGELOG](https://github.com/RitchieLabIGH/IRFinder/CHANGELOG.md)

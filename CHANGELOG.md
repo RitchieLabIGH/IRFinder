@@ -6,7 +6,7 @@
     1. New **Long** RunMode to process fast[q|a] files from long reads
     using Minimap2 as aligner.
     2. New **-l** argument in **BAM** RunMode, to process long reads using an alternative algorithm. More information in the paper.
-     3. New **AI** RunMode that uses a CNN model to detect false IR events on introns without warning in the last column of the result `IRFinder-IR-[non]dir.txt` file. It will generate a file containing only validated introns ( `IRFinder-IR-[non]dir-val.txt` )
+     3. New **AI** process that uses a CNN model to detect false IR events on introns without warning in the last column of the result `IRFinder-IR-[non]dir.txt` file. It will generate a file containing only validated introns ( `IRFinder-IR-[non]dir-val.txt` )
     4. New **Diff** RunMode that uses SUPPA2 ( https://github.com/comprna/SUPPA ) or DESeq2 algorithm to identify differential IR events. 
     5. New **CLI** with dedicated helps for each RunMode and a verbose mode.
     6. New **installation script**, to check the dependencies and install or uninstall IRFinder globally and locally.
