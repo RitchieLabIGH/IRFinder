@@ -19,6 +19,7 @@ my $blacklist = $ARGV[7];
 my $sjdbOverlap = $ARGV[8];
 my $mapabilityFile = $ARGV[9];
 my $mapabilityLen = $ARGV[10];
+my $limitGenomeGenerateRAM = $ARGV[11];
 
 my ($script_volume, $script_dir, $script_name) = File::Spec->splitpath(__FILE__);
 $basedir = File::Spec->rel2abs($basedir);
@@ -215,6 +216,7 @@ if ($doCalculation == 1) {
 	"--sjdbGTFfile", "$basedir/transcripts.gtf",
 	"--sjdbOverhang", $sjdbOverlap,
 	"--runThreadN", $threads,
+	"--limitGenomeGenerateRAM", $limitGenomeGenerateRAM,
 	'&>>', "log-star-build-ref.log"
 	);
 

@@ -21,6 +21,8 @@ function usage() {
 	echo "    -R ROI.bed.gz: A non-overlapping BED file of additional Regions of Interest for read counts." >&2
     echo "    -m Mapability: A precomputed bed file containing the low mapability areas. Can also be an empty file." >&2
     echo "    -n MapabilityReadLength: The length of the reads used to compute the mapability. Default: 70" >&2    
+    echo "    -L STAR limitGenomeGenerateRAM argument. Default: 31000000000" >&2
+	echo "    -h Show this usage information." >&2    
 	echo "" >&2
 	exit 1
 }
@@ -36,13 +38,14 @@ BUILDBLACK=
 STAREXEC=STAR
 MAPABILITY_FILE=
 MAPABILITY_LEN=100
+GENOMERAM=31000000000
 
 if [ $# -eq 0 ] || [[ $1 == "--help"  ]] ; then
 	usage
 fi
 
 
-while getopts ":m:r:j:t:S:e:b:R:M:l:hv" opt; do
+while getopts ":m:r:j:t:S:e:b:R:M:n:L:l:hv" opt; do
 	case $opt in
 		r)
 			# Reference directory.
@@ -64,6 +67,14 @@ while getopts ":m:r:j:t:S:e:b:R:M:l:hv" opt; do
 			fi
 			THREADS=$OPTARG
 			;;
+		L)
+			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.)
+			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
+				echo "Argument error: -L $OPTARG, limitGenomeGenerateRAM must be an integer." >&2
+				exit 1
+			fi
+			GENOMERAM=$OPTARG
+			;;			
 		S)
 			## STAR executable. (must be executable!)
 			if [ -x "$OPTARG" -a ! -d "$OPTARG" ]; then
@@ -152,7 +163,7 @@ fi
 
 
 echo "Launching reference build process. The full build might take hours."
-"$LIBEXEC/IRFinder-BuildRefFromEnsembl" "BuildRefProcess" "$THREADS" "$STAREXEC" "" "$REF" "$BUILDERCCFILE" "$BUILDROI" "$BUILDBLACK" "$SJOH" "$MAPABILITY_FILE" "$MAPABILITY_LEN"
+"$LIBEXEC/IRFinder-BuildRefFromEnsembl" "BuildRefProcess" "$THREADS" "$STAREXEC" "" "$REF" "$BUILDERCCFILE" "$BUILDROI" "$BUILDBLACK" "$SJOH" "$MAPABILITY_FILE" "$MAPABILITY_LEN" "$GENOMERAM"
 
 
 
