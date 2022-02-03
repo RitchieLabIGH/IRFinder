@@ -33,6 +33,8 @@ RUN	Rscript -e 'options(warn=2); if (!requireNamespace("BiocManager", quietly = 
 	Rscript -e 'installed.packages()' | awk  'BEGIN {v=0} $1=="Version" {v=1; } v==1 && $1 == "DESeq2" { gsub("\"", ""); print $2;v=0 } '
 
 
+ADD "https://www.random.org/cgi-bin/randbyte?nbytes=10&format=h" skipcache
+
 RUN mkdir -p /Utils/bin/ && \
     cd /Utils/ && \
     git clone https://github.com/alexdobin/STAR.git && \
@@ -42,7 +44,7 @@ RUN mkdir -p /Utils/bin/ && \
     ln -s /Utils/STAR/source/STAR /Utils/bin/STAR && \
 	cd /Utils && \
 	git clone https://github.com/comprna/SUPPA.git && \
-	cd ./SUPPA && git checkout tags/v2.3 && \
+	cd ./SUPPA && \
 	echo '#!/usr/bin/env python3' > /Utils/SUPPA/suppa.py.tmp && \
 	cat /Utils/SUPPA/suppa.py >> /Utils/SUPPA/suppa.py.tmp && \
 	mv /Utils/SUPPA/suppa.py.tmp /Utils/SUPPA/suppa.py && \
@@ -53,8 +55,7 @@ RUN cd /Utils/ && git clone https://github.com/lh3/minimap2 && \
 	cd minimap2 && git checkout tags/v2.3 && make && \
 	ln -s /Utils/minimap2/minimap2 /Utils/bin/minimap2	
 
-	
-ADD "https://www.random.org/cgi-bin/randbyte?nbytes=10&format=h" skipcache	
+
 
 COPY ./bin /IRFinder/bin
 COPY ./REF /IRFinder/REF
