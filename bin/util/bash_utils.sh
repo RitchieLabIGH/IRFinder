@@ -2,7 +2,7 @@
 ## Useful functions for IRFinder's utils
 
 export IRFINDER_BASH_UTILS_IMPORTED=1
-export VERSION=2.0.0
+export VERSION=2.0.1
 export LC_ALL=C
 export LANG=C
 
