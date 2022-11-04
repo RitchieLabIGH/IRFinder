@@ -24,5 +24,8 @@ Before diving into IRFinder package, users might also consider [IRBase](http://i
 
         
 ## Cite IRFinder    
+
+Lorenzi, C., Barriere, S., Arnold, K. et al. IRFinder-S: a comprehensive suite to discover and explore intron retention. [Genome Biol 22, 307 (2021)](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-021-02515-8). doi: [10.1186/s13059-021-02515-8](https://doi.org/10.1186/s13059-021-02515-8)
+
 Middleton R*, Gao D*, Thomas A, Singh B, Au A, Wong JJ, Bomane A, Cosson B, Eyras E, Rasko JE, Ritchie W. **IRFinder: assessing the impact of intron retention on mammalian gene expression**. [Genome Biol. 2017 Mar 15;18(1):51](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-017-1184-4). doi: 10.1186/s13059-017-1184-4. [PubMed PMID: 28298237](https://www-ncbi-nlm-nih-gov.ezp-prod1.hul.harvard.edu/pubmed/28298237).
 
