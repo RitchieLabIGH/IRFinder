@@ -579,7 +579,7 @@ int CoverageBlocksIRFinder::WriteOutput(std::ostream *os, std::ostream *os_ai,
 				}
 				MaxJC = std::max(JCleft, JCright);
 				double IRratio = 0;
-				if (!(intronTrimmedMean == 0 && JCleft == 0 && JCright == 0)) {
+				if ( intronTrimmedMean > 0 ) {
 					if (long_read) {
 						IRratio = (intronTrimmedMean
 								/ (intronTrimmedMean + JCexact));
